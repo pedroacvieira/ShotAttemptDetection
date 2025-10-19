@@ -17,6 +17,11 @@ typer = ">=0.9.0"
 [tool.poetry.group.dev.dependencies]
 black = "^25.9.0"
 
+[tool.poetry.scripts]
+eda = "src.exploratory_data_analysis:app"
+detect-shots = "src.detect_shots:app"
+evaluate = "src.evaluate:app"
+
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
