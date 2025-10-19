@@ -1,15 +1,21 @@
-[project]
+[tool.poetry]
 name = "shot-attempt-detection"
 version = "0.1.0"
 description = ""
-authors = [
-    {name = "Pedro Vieira",email = "pedrovieira@arrowplan.com"}
-]
+authors = ["Pedro Vieira <pedrovieira@arrowplan.com>"]
 readme = "README.md"
-requires-python = ">=3.12"
-dependencies = [
-]
+packages = [{include = "src"}]
 
+[tool.poetry.dependencies]
+python = ">=3.12"
+pandas = ">=2.0.0"
+matplotlib = ">=3.6.0"
+seaborn = ">=0.12.0"
+numpy = ">=1.24.0"
+typer = ">=0.9.0"
+
+[tool.poetry.group.dev.dependencies]
+black = "^25.9.0"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]

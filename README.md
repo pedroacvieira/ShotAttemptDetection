@@ -1,8 +1,8 @@
 # 🏀 Shot Attempt Detection Challenge
 
-**Author:** [Your Name]  
-**Date:** [Submission Date]  
-**Company Coding Challenge Submission**
+**Author:** Pedro Andrade Vieira  
+**Date:** _Something_ October 2025  
+**Kinexon Coding Challenge Submission**
 
 ---
 
@@ -27,7 +27,7 @@ The goal is not to achieve perfect accuracy but to demonstrate a **reasonable, e
 │   ├── player_positions.csv
 │   └── shot_events.json
 │
-├── src/
+├── shot-attempt-detection/
 │   ├── preprocess.py          # Data loading & synchronization
 │   ├── features.py            # Pose/position feature computation
 │   ├── detect_shots.py        # Heuristic detection algorithm
@@ -53,12 +53,12 @@ pip install -r requirements.txt
 
 ### 2. Run Detection
 ```bash
-python src/detect_shots.py --detections data/detections.csv                            --positions data/player_positions.csv                            --output output/predicted_shots.csv
+python src/detect_shots.py --detections data/detections.csv --positions data/player_positions.csv --output output/predicted_shots.csv
 ```
 
 ### 3. Evaluate Results
 ```bash
-python src/evaluate.py --pred output/predicted_shots.csv                        --truth data/shot_events.json
+python src/evaluate.py --pred output/predicted_shots.csv --truth data/shot_events.json
 ```
 
 ---
@@ -79,10 +79,9 @@ All data are synchronized on timestamp (ms).
 ### 2. Feature Engineering
 
 For each player over time:
-- **Arm angle**: computed using shoulder–elbow–wrist keypoints  
-  → Detects arm-raising motion.  
-- **Vertical motion**: difference in y-coordinates of wrists over time  
-  → Detects upward motion.  
+- **Vertical motion**: difference in y-coordinates of hands over time
+  → Detects upward motion compared to head/hip.
+Lower body stability (hip vs. feet)
 - **Player velocity**: computed from position deltas  
   → Shots usually occur when horizontal motion is low.  
 - **Temporal smoothing**: rolling median to reduce noise.
