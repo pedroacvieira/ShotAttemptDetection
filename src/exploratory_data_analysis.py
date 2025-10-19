@@ -58,7 +58,9 @@ def plot_player_trajectories(positions_df: pd.DataFrame, shot_events_df: pd.Data
         plt.show()
 
 
-def plot_skeleton_movement(detections_df: pd.DataFrame, shot_events_df: pd.DataFrame, player_id: int = 0, save_plots: bool = True):
+def plot_skeleton_movement(
+    detections_df: pd.DataFrame, shot_events_df: pd.DataFrame, player_id: int = 0, save_plots: bool = True
+):
     """Plot skeleton keypoint movement over time for a specific player."""
     player_data = detections_df[detections_df["player_id"] == player_id].copy()
 
@@ -70,8 +72,8 @@ def plot_skeleton_movement(detections_df: pd.DataFrame, shot_events_df: pd.DataF
     player_data = player_data.sort_values("timestamp_s")
 
     # Filter shot events for this specific player
-    if not shot_events_df.empty and 'player_id' in shot_events_df.columns:
-        player_shots = shot_events_df[shot_events_df['player_id'] == str(player_id)]['timestamp_s'].values
+    if not shot_events_df.empty and "player_id" in shot_events_df.columns:
+        player_shots = shot_events_df[shot_events_df["player_id"] == str(player_id)]["timestamp_s"].values
     else:
         player_shots = []
 
@@ -98,7 +100,7 @@ def plot_skeleton_movement(detections_df: pd.DataFrame, shot_events_df: pd.DataF
 
     # Mark shot attempts
     for shot_time in player_shots:
-        axes[0, 0].axvline(x=shot_time, color='red', linestyle='--', alpha=0.7, linewidth=2)
+        axes[0, 0].axvline(x=shot_time, color="red", linestyle="--", alpha=0.7, linewidth=2)
 
     # Hand separation (arm spread)
     hand_separation = np.sqrt(
@@ -113,7 +115,7 @@ def plot_skeleton_movement(detections_df: pd.DataFrame, shot_events_df: pd.DataF
 
     # Mark shot attempts
     for shot_time in player_shots:
-        axes[0, 1].axvline(x=shot_time, color='red', linestyle='--', alpha=0.7, linewidth=2)
+        axes[0, 1].axvline(x=shot_time, color="red", linestyle="--", alpha=0.7, linewidth=2)
 
     # Hip stability
     axes[1, 0].plot(
@@ -136,7 +138,7 @@ def plot_skeleton_movement(detections_df: pd.DataFrame, shot_events_df: pd.DataF
 
     # Mark shot attempts
     for shot_time in player_shots:
-        axes[1, 0].axvline(x=shot_time, color='red', linestyle='--', alpha=0.7, linewidth=2)
+        axes[1, 0].axvline(x=shot_time, color="red", linestyle="--", alpha=0.7, linewidth=2)
 
     # Confidence over time
     axes[1, 1].plot(player_data["timestamp_s"], player_data["confidence"], "red", alpha=0.7)
@@ -198,6 +200,7 @@ def plot_shot_timing_analysis(shot_events_df: pd.DataFrame, save_plots: bool = T
         plt.savefig("output/shot_timing_analysis.png")
     else:
         plt.show()
+
 
 def plot_data_quality_overview(detections_df: pd.DataFrame, positions_df: pd.DataFrame, save_plots: bool = True):
     """Overview of data quality metrics."""

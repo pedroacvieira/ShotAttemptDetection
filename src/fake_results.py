@@ -17,7 +17,7 @@ app = typer.Typer(help="Generate fake predictions from ground truth data")
 @app.command()
 def generate(
     input_file: Path = typer.Option("data/shot_events.json", help="Path to shot events JSON file"),
-    output_file: Path = typer.Option("output/predicted_shots.csv", help="Path to output predicted shots CSV")
+    output_file: Path = typer.Option("output/predicted_shots.csv", help="Path to output predicted shots CSV"),
 ):
     """
     Convert ground truth shot events to predicted shots CSV format.
@@ -29,7 +29,7 @@ def generate(
 
     try:
         # Load JSON data
-        with open(input_file, 'r') as f:
+        with open(input_file, "r") as f:
             shot_events = json.load(f)
 
         print(f"Found {len(shot_events)} shot events")
@@ -38,13 +38,15 @@ def generate(
         df = pd.DataFrame(shot_events)
 
         # Convert timestamp_s to timestamp_ms
-        df['timestamp_ms'] = (df['timestamp_s'] * 1000).astype(int)
+        df["timestamp_ms"] = (df["timestamp_s"] * 1000).astype(int)
 
         # Create the output dataframe with only required columns
-        output_df = pd.DataFrame({
-            'timestamp_ms': df['timestamp_ms'],
-            'player_id': df.get('player_id', 'Unknown')  # Use 'Unknown' if player_id doesn't exist
-        })
+        output_df = pd.DataFrame(
+            {
+                "timestamp_ms": df["timestamp_ms"],
+                "player_id": df.get("player_id", "Unknown"),  # Use 'Unknown' if player_id doesn't exist
+            }
+        )
 
         # Ensure output directory exists
         output_file.parent.mkdir(parents=True, exist_ok=True)

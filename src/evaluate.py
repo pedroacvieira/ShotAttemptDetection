@@ -9,22 +9,23 @@ using precision, recall, and F1-score metrics with temporal tolerance.
 import json
 import pandas as pd
 import numpy as np
+import numpy.typing as npt
 import typer
 from pathlib import Path
-from typing import Tuple, List
+from typing import Any
 import matplotlib.pyplot as plt
-import seaborn as sns
+from numpy import ndarray, dtype
 
 app = typer.Typer(help="Evaluate shot detection predictions against ground truth")
 
 
 def load_ground_truth(file_path: Path) -> pd.DataFrame:
     """Load ground truth shot events from JSON file."""
-    with open(file_path, 'r') as f:
+    with open(file_path, "r") as f:
         data = json.load(f)
 
     df = pd.DataFrame(data)
-    df['timestamp_ms'] = (df['timestamp_s'] * 1000).astype(int)
+    df["timestamp_ms"] = (df["timestamp_s"] * 1000).astype(int)
     return df
 
 
@@ -35,11 +36,8 @@ def load_predictions(file_path: Path) -> pd.DataFrame:
 
 
 def evaluate_temporal_matching(
-    predictions: pd.DataFrame,
-    ground_truth: pd.DataFrame,
-    tolerance_ms: int = 500,
-    match_player_id: bool = True
-) -> Tuple[List[bool], List[bool], int, int]:
+    predictions: pd.DataFrame, ground_truth: pd.DataFrame, tolerance_ms: int = 500, match_player_id: bool = True
+) -> tuple[ndarray[tuple[int], dtype[Any]], ndarray[tuple[int], dtype[Any]], int, int]:
     """
     Evaluate predictions against ground truth with temporal tolerance.
 
@@ -52,12 +50,12 @@ def evaluate_temporal_matching(
     Returns:
         Tuple of (true_positives_mask, matched_gt_mask, num_predictions, num_ground_truth)
     """
-    pred_times = predictions['timestamp_ms'].values
-    gt_times = ground_truth['timestamp_ms'].values
+    pred_times = predictions["timestamp_ms"].values
+    gt_times = ground_truth["timestamp_ms"].values
 
-    if match_player_id and 'player_id' in predictions.columns and 'player_id' in ground_truth.columns:
-        pred_players = predictions['player_id'].astype(str).values
-        gt_players = ground_truth['player_id'].astype(str).values
+    if match_player_id and "player_id" in predictions.columns and "player_id" in ground_truth.columns:
+        pred_players = predictions["player_id"].astype(str).values
+        gt_players = ground_truth["player_id"].astype(str).values
     else:
         pred_players = None
         gt_players = None
@@ -81,7 +79,7 @@ def evaluate_temporal_matching(
         # If player matching is enabled, also check player IDs
         if pred_players is not None and gt_players is not None:
             pred_player = pred_players[i]
-            player_matches = (gt_players == pred_player) | (pred_player == 'Undefined') | (gt_players == 'Undefined')
+            player_matches = (gt_players == pred_player) | (pred_player == "Undefined") | (gt_players == "Undefined")
             valid_matches = within_tolerance & player_matches & (~matched_gt_mask)
         else:
             valid_matches = within_tolerance & (~matched_gt_mask)
@@ -97,8 +95,9 @@ def evaluate_temporal_matching(
     return tp_mask, matched_gt_mask, len(predictions), len(ground_truth)
 
 
-def calculate_metrics(tp_mask: List[bool], matched_gt_mask: List[bool],
-                     num_predictions: int, num_ground_truth: int) -> dict:
+def calculate_metrics(
+    tp_mask: npt.NDArray, matched_gt_mask: npt.NDArray, num_predictions: int, num_ground_truth: int
+) -> dict:
     """Calculate precision, recall, and F1-score."""
     true_positives = np.sum(tp_mask)
     false_positives = num_predictions - true_positives
@@ -109,77 +108,109 @@ def calculate_metrics(tp_mask: List[bool], matched_gt_mask: List[bool],
     f1_score = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
 
     return {
-        'true_positives': int(true_positives),
-        'false_positives': int(false_positives),
-        'false_negatives': int(false_negatives),
-        'precision': precision,
-        'recall': recall,
-        'f1_score': f1_score,
-        'num_predictions': num_predictions,
-        'num_ground_truth': num_ground_truth
+        "true_positives": int(true_positives),
+        "false_positives": int(false_positives),
+        "false_negatives": int(false_negatives),
+        "precision": precision,
+        "recall": recall,
+        "f1_score": f1_score,
+        "num_predictions": num_predictions,
+        "num_ground_truth": num_ground_truth,
     }
 
 
-def plot_temporal_alignment(predictions: pd.DataFrame, ground_truth: pd.DataFrame,
-                          tp_mask: List[bool], matched_gt_mask: List[bool],
-                          save_plots: bool = True):
+def plot_temporal_alignment(
+    predictions: pd.DataFrame,
+    ground_truth: pd.DataFrame,
+    tp_mask: npt.NDArray,
+    matched_gt_mask: npt.NDArray,
+    save_plots: bool = True,
+):
     """Plot temporal alignment between predictions and ground truth."""
     fig, axes = plt.subplots(2, 1, figsize=(15, 10))
 
     # Convert to relative timestamps (minutes)
-    min_time = min(predictions['timestamp_ms'].min(), ground_truth['timestamp_ms'].min())
-    pred_times_rel = (predictions['timestamp_ms'] - min_time) / 60000  # minutes
-    gt_times_rel = (ground_truth['timestamp_ms'] - min_time) / 60000  # minutes
+    min_time = min(predictions["timestamp_ms"].min(), ground_truth["timestamp_ms"].min())
+    pred_times_rel = (predictions["timestamp_ms"] - min_time) / 60000  # minutes
+    gt_times_rel = (ground_truth["timestamp_ms"] - min_time) / 60000  # minutes
 
     # Plot 1: Timeline view
     # Ground truth events
-    axes[0].scatter(gt_times_rel[matched_gt_mask], [1] * np.sum(matched_gt_mask),
-                   c='green', s=100, alpha=0.7, label=f'Matched GT ({np.sum(matched_gt_mask)})', marker='s')
-    axes[0].scatter(gt_times_rel[~matched_gt_mask], [1] * np.sum(~matched_gt_mask),
-                   c='red', s=100, alpha=0.7, label=f'Missed GT ({np.sum(~matched_gt_mask)})', marker='s')
+    axes[0].scatter(
+        gt_times_rel[matched_gt_mask],
+        [1] * np.sum(matched_gt_mask),
+        c="green",
+        s=100,
+        alpha=0.7,
+        label=f"Matched GT ({np.sum(matched_gt_mask)})",
+        marker="s",
+    )
+    axes[0].scatter(
+        gt_times_rel[~matched_gt_mask],
+        [1] * np.sum(~matched_gt_mask),
+        c="red",
+        s=100,
+        alpha=0.7,
+        label=f"Missed GT ({np.sum(~matched_gt_mask)})",
+        marker="s",
+    )
 
     # Predictions
-    axes[0].scatter(pred_times_rel[tp_mask], [0] * np.sum(tp_mask),
-                   c='green', s=80, alpha=0.7, label=f'True Positives ({np.sum(tp_mask)})', marker='o')
-    axes[0].scatter(pred_times_rel[~tp_mask], [0] * np.sum(~tp_mask),
-                   c='orange', s=80, alpha=0.7, label=f'False Positives ({np.sum(~tp_mask)})', marker='o')
+    axes[0].scatter(
+        pred_times_rel[tp_mask],
+        [0] * np.sum(tp_mask),
+        c="green",
+        s=80,
+        alpha=0.7,
+        label=f"True Positives ({np.sum(tp_mask)})",
+        marker="o",
+    )
+    axes[0].scatter(
+        pred_times_rel[~tp_mask],
+        [0] * np.sum(~tp_mask),
+        c="orange",
+        s=80,
+        alpha=0.7,
+        label=f"False Positives ({np.sum(~tp_mask)})",
+        marker="o",
+    )
 
     axes[0].set_ylim(-0.5, 1.5)
     axes[0].set_yticks([0, 1])
-    axes[0].set_yticklabels(['Predictions', 'Ground Truth'])
-    axes[0].set_xlabel('Time (minutes)')
-    axes[0].set_title('Temporal Alignment of Predictions vs Ground Truth')
+    axes[0].set_yticklabels(["Predictions", "Ground Truth"])
+    axes[0].set_xlabel("Time (minutes)")
+    axes[0].set_title("Temporal Alignment of Predictions vs Ground Truth")
     axes[0].legend()
     axes[0].grid(True, alpha=0.3)
 
     # Plot 2: Histogram of time differences for matched events
     if np.sum(tp_mask) > 0:
-        matched_pred_times = predictions.loc[tp_mask, 'timestamp_ms'].values
-        matched_gt_times = ground_truth.loc[matched_gt_mask, 'timestamp_ms'].values
+        matched_pred_times = predictions.loc[tp_mask, "timestamp_ms"].values
 
         # Calculate time differences for matched pairs
         time_diffs = []
         for pred_time in matched_pred_times:
-            gt_times = ground_truth['timestamp_ms'].values
+            gt_times = ground_truth["timestamp_ms"].values
             closest_gt_idx = np.argmin(np.abs(gt_times - pred_time))
             time_diff = pred_time - gt_times[closest_gt_idx]
             time_diffs.append(time_diff)
 
-        axes[1].hist(time_diffs, bins=20, alpha=0.7, edgecolor='black')
-        axes[1].set_xlabel('Time Difference (ms): Prediction - Ground Truth')
-        axes[1].set_ylabel('Count')
-        axes[1].set_title('Distribution of Time Differences for Matched Events')
-        axes[1].axvline(x=0, color='red', linestyle='--', alpha=0.7, label='Perfect Match')
+        axes[1].hist(time_diffs, bins=20, alpha=0.7, edgecolor="black")
+        axes[1].set_xlabel("Time Difference (ms): Prediction - Ground Truth")
+        axes[1].set_ylabel("Count")
+        axes[1].set_title("Distribution of Time Differences for Matched Events")
+        axes[1].axvline(x=0, color="red", linestyle="--", alpha=0.7, label="Perfect Match")
         axes[1].legend()
         axes[1].grid(True, alpha=0.3)
     else:
-        axes[1].text(0.5, 0.5, 'No matched events to display',
-                    transform=axes[1].transAxes, ha='center', va='center', fontsize=14)
-        axes[1].set_title('Distribution of Time Differences for Matched Events')
+        axes[1].text(
+            0.5, 0.5, "No matched events to display", transform=axes[1].transAxes, ha="center", va="center", fontsize=14
+        )
+        axes[1].set_title("Distribution of Time Differences for Matched Events")
 
     plt.tight_layout()
     if save_plots:
-        plt.savefig('output/evaluation_temporal_alignment.png', dpi=150, bbox_inches='tight')
+        plt.savefig("output/evaluation_temporal_alignment.png", dpi=150, bbox_inches="tight")
     else:
         plt.show()
 
@@ -207,11 +238,11 @@ def print_detailed_results(metrics: dict, tolerance_ms: int):
 
     # Performance interpretation
     print(f"\nINTERPRETATION:")
-    if metrics['f1_score'] >= 0.8:
+    if metrics["f1_score"] >= 0.8:
         print("  Excellent performance!")
-    elif metrics['f1_score'] >= 0.6:
+    elif metrics["f1_score"] >= 0.6:
         print("  Good performance with room for improvement")
-    elif metrics['f1_score'] >= 0.4:
+    elif metrics["f1_score"] >= 0.4:
         print("  Moderate performance - consider algorithm improvements")
     else:
         print("  Poor performance - significant improvements needed")
@@ -225,7 +256,7 @@ def evaluate(
     tolerance_ms: int = typer.Option(500, help="Temporal tolerance in milliseconds"),
     match_player_id: bool = typer.Option(True, help="Whether to match player IDs"),
     save_plots: bool = typer.Option(True, help="Save evaluation plots"),
-    verbose: bool = typer.Option(False, help="Show detailed per-event analysis")
+    verbose: bool = typer.Option(False, help="Show detailed per-event analysis"),
 ):
     """
     Evaluate shot detection predictions against ground truth.
@@ -264,15 +295,15 @@ def evaluate(
         if verbose:
             print("\nDETAILED ANALYSIS:")
             print(f"\nTrue Positive Events:")
-            tp_events = pred_df[tp_mask][['timestamp_ms', 'player_id']].head(10)
+            tp_events = pred_df[tp_mask][["timestamp_ms", "player_id"]].head(10)
             print(tp_events.to_string(index=False))
 
             print(f"\nFalse Positive Events (first 10):")
-            fp_events = pred_df[~tp_mask][['timestamp_ms', 'player_id']].head(10)
+            fp_events = pred_df[~tp_mask][["timestamp_ms", "player_id"]].head(10)
             print(fp_events.to_string(index=False))
 
             print(f"\nMissed Ground Truth Events (first 10):")
-            missed_events = gt_df[~matched_gt_mask][['timestamp_s', 'player_id']].head(10)
+            missed_events = gt_df[~matched_gt_mask][["timestamp_s", "player_id"]].head(10)
             print(missed_events.to_string(index=False))
 
     except FileNotFoundError as e:
