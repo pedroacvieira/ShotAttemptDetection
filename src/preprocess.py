@@ -29,8 +29,6 @@ def load_shot_events(file_path: Path) -> pd.DataFrame:
 
 def load_data(detections: Path, positions: Path, shots: Path):
     print("Loading basketball shot detection data...")
-
-    # Load data
     try:
         detections_df = load_detections(detections)
         positions_df = load_positions(positions)
@@ -38,28 +36,18 @@ def load_data(detections: Path, positions: Path, shots: Path):
         print("Data loaded successfully!")
 
         # Make timestamps relative to the earliest timestamp across all datasets
-        min_timestamp = min(
-            detections_df["timestamp_s"].min(),
-            positions_df["timestamp_s"].min(),
-            (
-                shot_events_df["timestamp_s"].min()
-                if not shot_events_df.empty
-                else float("inf")
-            ),
-        )
+        min_timestamp = min(detections_df["timestamp_s"].min(), positions_df["timestamp_s"].min())
 
         detections_df["timestamp_s"] = detections_df["timestamp_s"] - min_timestamp
         positions_df["timestamp_s"] = positions_df["timestamp_s"] - min_timestamp
         if not shot_events_df.empty:
-            shot_events_df["timestamp_s"] = (
-                shot_events_df["timestamp_s"] - min_timestamp
-            )
+            shot_events_df["timestamp_s"] = shot_events_df["timestamp_s"] - min_timestamp
+
             if "end_timestamp_s" in shot_events_df.columns:
-                shot_events_df["end_timestamp_s"] = (
-                    shot_events_df["end_timestamp_s"] - min_timestamp
-                )
+                shot_events_df["end_timestamp_s"] = shot_events_df["end_timestamp_s"] - min_timestamp
 
         print(f"Normalized timestamps to start at 0.0s (offset: {min_timestamp:.3f}s)")
+        return detections_df, positions_df, shot_events_df
 
     except Exception as e:
         print(f"Error loading data: {e}")

@@ -20,7 +20,7 @@ from src.preprocess import load_data
 app = typer.Typer(help="Exploratory Data Analysis for Shot Attempt Detection")
 
 
-def plot_player_trajectories(positions_df: pd.DataFrame, shot_events_df: pd.DataFrame):
+def plot_player_trajectories(positions_df: pd.DataFrame, shot_events_df: pd.DataFrame, save_plots: bool = True):
     """Plot player trajectories on court."""
     plt.figure(figsize=(15, 10))
 
@@ -51,10 +51,14 @@ def plot_player_trajectories(positions_df: pd.DataFrame, shot_events_df: pd.Data
     plt.grid(True, alpha=0.3)
     plt.axis("equal")
     plt.tight_layout()
-    plt.savefig("output/player_trajectories.png")
+
+    if save_plots:
+        plt.savefig("output/player_trajectories.png")
+    else:
+        plt.show()
 
 
-def plot_skeleton_movement(detections_df: pd.DataFrame, player_id: int = 0):
+def plot_skeleton_movement(detections_df: pd.DataFrame, player_id: int = 0, save_plots: bool = True):
     """Plot skeleton keypoint movement over time for a specific player."""
     player_data = detections_df[detections_df["player_id"] == player_id].copy()
 
@@ -117,19 +121,20 @@ def plot_skeleton_movement(detections_df: pd.DataFrame, player_id: int = 0):
     axes[1, 0].grid(True, alpha=0.3)
 
     # Confidence over time
-    axes[1, 1].plot(
-        player_data["timestamp_s"], player_data["confidence"], "red", alpha=0.7
-    )
+    axes[1, 1].plot(player_data["timestamp_s"], player_data["confidence"], "red", alpha=0.7)
     axes[1, 1].set_title(f"Detection Confidence - Player {player_id}")
     axes[1, 1].set_xlabel("Time (s)")
     axes[1, 1].set_ylabel("Confidence")
     axes[1, 1].grid(True, alpha=0.3)
 
     plt.tight_layout()
-    plt.savefig(f"output/skeleton_movement_player_{player_id}.png")
+    if save_plots:
+        plt.savefig(f"output/skeleton_movement_player_{player_id}.png")
+    else:
+        plt.show()
 
 
-def plot_shot_timing_analysis(shot_events_df: pd.DataFrame):
+def plot_shot_timing_analysis(shot_events_df: pd.DataFrame, save_plots: bool = True):
     """Analyze shot timing patterns."""
     if shot_events_df.empty:
         print("No shot events found")
@@ -138,9 +143,7 @@ def plot_shot_timing_analysis(shot_events_df: pd.DataFrame):
     fig, axes = plt.subplots(2, 2, figsize=(15, 10))
 
     # Shot timing distribution
-    axes[0, 0].hist(
-        shot_events_df["timestamp_s"], bins=30, alpha=0.7, edgecolor="black"
-    )
+    axes[0, 0].hist(shot_events_df["timestamp_s"], bins=30, alpha=0.7, edgecolor="black")
     axes[0, 0].set_title("Shot Event Time Distribution")
     axes[0, 0].set_xlabel("Time (s)")
     axes[0, 0].set_ylabel("Number of Shots")
@@ -149,16 +152,12 @@ def plot_shot_timing_analysis(shot_events_df: pd.DataFrame):
     # Success rate
     if "successful" in shot_events_df.columns:
         success_rate = shot_events_df["successful"].value_counts()
-        axes[0, 1].pie(
-            success_rate.values, labels=success_rate.index, autopct="%1.1f%%"
-        )
+        axes[0, 1].pie(success_rate.values, labels=success_rate.index, autopct="%1.1f%%")
         axes[0, 1].set_title("Shot Success Rate")
 
     # Shot duration distribution
     if "end_timestamp_s" in shot_events_df.columns:
-        shot_duration = (
-            shot_events_df["end_timestamp_s"] - shot_events_df["timestamp_s"]
-        )
+        shot_duration = shot_events_df["end_timestamp_s"] - shot_events_df["timestamp_s"]
         axes[1, 0].hist(shot_duration, bins=20, alpha=0.7, edgecolor="black")
         axes[1, 0].set_title("Shot Duration Distribution")
         axes[1, 0].set_xlabel("Duration (s)")
@@ -175,10 +174,12 @@ def plot_shot_timing_analysis(shot_events_df: pd.DataFrame):
         axes[1, 1].grid(True, alpha=0.3)
 
     plt.tight_layout()
-    plt.savefig("output/shot_timing_analysis.png")
+    if save_plots:
+        plt.savefig("output/shot_timing_analysis.png")
+    else:
+        plt.show()
 
-
-def plot_data_quality_overview(detections_df: pd.DataFrame, positions_df: pd.DataFrame):
+def plot_data_quality_overview(detections_df: pd.DataFrame, positions_df: pd.DataFrame, save_plots: bool = True):
     """Overview of data quality metrics."""
     fig, axes = plt.subplots(2, 2, figsize=(15, 10))
 
@@ -200,16 +201,10 @@ def plot_data_quality_overview(detections_df: pd.DataFrame, positions_df: pd.Dat
     axes[0, 1].grid(True, alpha=0.3)
 
     # Timeline coverage
-    det_time_range = (
-        detections_df["timestamp_s"].max() - detections_df["timestamp_s"].min()
-    )
-    pos_time_range = (
-        positions_df["timestamp_s"].max() - positions_df["timestamp_s"].min()
-    )
+    det_time_range = detections_df["timestamp_s"].max() - detections_df["timestamp_s"].min()
+    pos_time_range = positions_df["timestamp_s"].max() - positions_df["timestamp_s"].min()
 
-    axes[1, 0].bar(
-        ["Detections", "Positions"], [det_time_range, pos_time_range], alpha=0.7
-    )
+    axes[1, 0].bar(["Detections", "Positions"], [det_time_range, pos_time_range], alpha=0.7)
     axes[1, 0].set_title("Data Timeline Coverage")
     axes[1, 0].set_ylabel("Time Range (s)")
     axes[1, 0].grid(True, alpha=0.3)
@@ -218,15 +213,16 @@ def plot_data_quality_overview(detections_df: pd.DataFrame, positions_df: pd.Dat
     missing_detections = detections_df.isnull().sum().sum()
     missing_positions = positions_df.isnull().sum().sum()
 
-    axes[1, 1].bar(
-        ["Detections", "Positions"], [missing_detections, missing_positions], alpha=0.7
-    )
+    axes[1, 1].bar(["Detections", "Positions"], [missing_detections, missing_positions], alpha=0.7)
     axes[1, 1].set_title("Missing Data Points")
     axes[1, 1].set_ylabel("Count")
     axes[1, 1].grid(True, alpha=0.3)
 
     plt.tight_layout()
-    plt.savefig("output/data_quality_overview.png")
+    if save_plots:
+        plt.savefig("output/data_quality_overview.png")
+    else:
+        plt.show()
 
 
 def print_data_summary(
@@ -242,29 +238,17 @@ def print_data_summary(
     print(f"\nDETECTIONS DATA:")
     print(f"  - Shape: {detections_df.shape}")
     print(f"  - Players: {detections_df['player_id'].nunique()}")
-    print(
-        f"  - Time range: {detections_df['timestamp_s'].min():.1f} - {detections_df['timestamp_s'].max():.1f} s"
-    )
-    print(
-        f"  - Duration: {detections_df['timestamp_s'].max() - detections_df['timestamp_s'].min():.1f} s"
-    )
+    print(f"  - Time range: {detections_df['timestamp_s'].min():.1f} - {detections_df['timestamp_s'].max():.1f} s")
+    print(f"  - Duration: {detections_df['timestamp_s'].max() - detections_df['timestamp_s'].min():.1f} s")
     print(f"  - Avg confidence: {detections_df['confidence'].mean():.3f}")
 
     print(f"\nPOSITIONS DATA:")
     print(f"  - Shape: {positions_df.shape}")
     print(f"  - Players: {positions_df['player_id'].nunique()}")
-    print(
-        f"  - Time range: {positions_df['timestamp_s'].min():.1f} - {positions_df['timestamp_s'].max():.1f} s"
-    )
-    print(
-        f"  - Duration: {positions_df['timestamp_s'].max() - positions_df['timestamp_s'].min():.1f} s"
-    )
-    print(
-        f"  - Court bounds: X=[{positions_df['x in m'].min():.1f}, {positions_df['x in m'].max():.1f}]"
-    )
-    print(
-        f"                  Y=[{positions_df['y in m'].min():.1f}, {positions_df['y in m'].max():.1f}]"
-    )
+    print(f"  - Time range: {positions_df['timestamp_s'].min():.1f} - {positions_df['timestamp_s'].max():.1f} s")
+    print(f"  - Duration: {positions_df['timestamp_s'].max() - positions_df['timestamp_s'].min():.1f} s")
+    print(f"  - Court bounds: X=[{positions_df['x in m'].min():.1f}, {positions_df['x in m'].max():.1f}]")
+    print(f"                  Y=[{positions_df['y in m'].min():.1f}, {positions_df['y in m'].max():.1f}]")
 
     print(f"\nSHOT EVENTS:")
     print(f"  - Total shots: {len(shot_events_df)}")
@@ -281,21 +265,11 @@ def print_data_summary(
 
 @app.command()
 def analyze(
-    detections: Path = typer.Option(
-        "data/detections.csv", help="Path to detections CSV file"
-    ),
-    positions: Path = typer.Option(
-        "data/player_positions.csv", help="Path to positions CSV file"
-    ),
-    shots: Path = typer.Option(
-        "data/shot_events.json", help="Path to shot events JSON file"
-    ),
-    player_focus: Optional[int] = typer.Option(
-        None, help="Focus analysis on specific player ID"
-    ),
-    save_plots: bool = typer.Option(
-        False, help="Save plots instead of displaying them"
-    ),
+    detections: Path = typer.Option("data/detections.csv", help="Path to detections CSV file"),
+    positions: Path = typer.Option("data/player_positions.csv", help="Path to positions CSV file"),
+    shots: Path = typer.Option("data/shot_events.json", help="Path to shot events JSON file"),
+    player_focus: Optional[int] = typer.Option(None, help="Focus analysis on specific player ID"),
+    save_plots: bool = typer.Option(True, help="Save plots instead of displaying them"),
 ):
     """
     Run exploratory data analysis on basketball shot detection data.
@@ -303,16 +277,11 @@ def analyze(
     This command loads the three data sources and generates comprehensive
     visualizations to understand the dataset characteristics.
     """
-    detections_df, positions_df, shot_events_df = load_data(
-        detections, positions, shots, player_focus
-    )
+    detections_df, positions_df, shot_events_df = load_data(detections, positions, shots)
 
     # Set up plotting style
     plt.style.use("default")
     sns.set_palette("husl")
-
-    if save_plots:
-        plt.ioff()  # Turn off interactive mode
 
     # Print summary
     print_data_summary(detections_df, positions_df, shot_events_df)
@@ -321,27 +290,23 @@ def analyze(
 
     # Generate plots
     print("  - Data quality overview...")
-    plot_data_quality_overview(detections_df, positions_df)
+    plot_data_quality_overview(detections_df, positions_df, save_plots)
 
     print("  - Player trajectories...")
-    plot_player_trajectories(positions_df, shot_events_df)
+    plot_player_trajectories(positions_df, shot_events_df, save_plots)
 
     print("  - Shot timing analysis...")
-    plot_shot_timing_analysis(shot_events_df)
+    plot_shot_timing_analysis(shot_events_df, save_plots)
 
     # Player-specific analysis
     if player_focus is not None:
         print(f"  - Skeleton analysis for player {player_focus}...")
-        plot_skeleton_movement(detections_df, player_focus)
+        plot_skeleton_movement(detections_df, player_focus, save_plots)
     else:
         # Analyze the player with most detections
         top_player = detections_df["player_id"].value_counts().index[0]
         print(f"  - Skeleton analysis for most active player ({top_player})...")
-        plot_skeleton_movement(detections_df, top_player)
-
-    if save_plots:
-        print("Plots saved to current directory")
-        plt.ion()  # Turn interactive mode back on
+        plot_skeleton_movement(detections_df, top_player, save_plots)
 
     print("Analysis complete!")
 
