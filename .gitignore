@@ -1,8 +1,10 @@
 # Project-specific ignores
-data/
+data/*
 !data/.gitkeep
-output/
+output/*
 !output/.gitkeep
+plots/*
+!plots/.gitkeep
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
