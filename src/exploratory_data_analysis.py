@@ -58,7 +58,7 @@ def plot_player_trajectories(positions_df: pd.DataFrame, shot_events_df: pd.Data
         plt.show()
 
 
-def plot_skeleton_movement(detections_df: pd.DataFrame, player_id: int = 0, save_plots: bool = True):
+def plot_skeleton_movement(detections_df: pd.DataFrame, shot_events_df: pd.DataFrame, player_id: int = 0, save_plots: bool = True):
     """Plot skeleton keypoint movement over time for a specific player."""
     player_data = detections_df[detections_df["player_id"] == player_id].copy()
 
@@ -69,7 +69,13 @@ def plot_skeleton_movement(detections_df: pd.DataFrame, player_id: int = 0, save
     # Sort by timestamp
     player_data = player_data.sort_values("timestamp_s")
 
-    fig, axes = plt.subplots(2, 2, figsize=(15, 10))
+    # Filter shot events for this specific player
+    if not shot_events_df.empty and 'player_id' in shot_events_df.columns:
+        player_shots = shot_events_df[shot_events_df['player_id'] == str(player_id)]['timestamp_s'].values
+    else:
+        player_shots = []
+
+    fig, axes = plt.subplots(2, 2, figsize=(30, 20))
 
     # Hand positions over time
     axes[0, 0].plot(
@@ -90,6 +96,10 @@ def plot_skeleton_movement(detections_df: pd.DataFrame, player_id: int = 0, save
     axes[0, 0].legend()
     axes[0, 0].grid(True, alpha=0.3)
 
+    # Mark shot attempts
+    for shot_time in player_shots:
+        axes[0, 0].axvline(x=shot_time, color='red', linestyle='--', alpha=0.7, linewidth=2)
+
     # Hand separation (arm spread)
     hand_separation = np.sqrt(
         (player_data["left-hand-x"] - player_data["right-hand-x"]) ** 2
@@ -100,6 +110,10 @@ def plot_skeleton_movement(detections_df: pd.DataFrame, player_id: int = 0, save
     axes[0, 1].set_xlabel("Time (s)")
     axes[0, 1].set_ylabel("Hand Separation (normalized)")
     axes[0, 1].grid(True, alpha=0.3)
+
+    # Mark shot attempts
+    for shot_time in player_shots:
+        axes[0, 1].axvline(x=shot_time, color='red', linestyle='--', alpha=0.7, linewidth=2)
 
     # Hip stability
     axes[1, 0].plot(
@@ -120,12 +134,18 @@ def plot_skeleton_movement(detections_df: pd.DataFrame, player_id: int = 0, save
     axes[1, 0].legend()
     axes[1, 0].grid(True, alpha=0.3)
 
+    # Mark shot attempts
+    for shot_time in player_shots:
+        axes[1, 0].axvline(x=shot_time, color='red', linestyle='--', alpha=0.7, linewidth=2)
+
     # Confidence over time
     axes[1, 1].plot(player_data["timestamp_s"], player_data["confidence"], "red", alpha=0.7)
     axes[1, 1].set_title(f"Detection Confidence - Player {player_id}")
     axes[1, 1].set_xlabel("Time (s)")
     axes[1, 1].set_ylabel("Confidence")
     axes[1, 1].grid(True, alpha=0.3)
+
+    # TODO: Add legend for shot markers
 
     plt.tight_layout()
     if save_plots:
@@ -301,12 +321,12 @@ def analyze(
     # Player-specific analysis
     if player_focus is not None:
         print(f"  - Skeleton analysis for player {player_focus}...")
-        plot_skeleton_movement(detections_df, player_focus, save_plots)
+        plot_skeleton_movement(detections_df, shot_events_df, player_focus, save_plots)
     else:
         # Analyze the player with most detections
         top_player = detections_df["player_id"].value_counts().index[0]
         print(f"  - Skeleton analysis for most active player ({top_player})...")
-        plot_skeleton_movement(detections_df, top_player, save_plots)
+        plot_skeleton_movement(detections_df, shot_events_df, top_player, save_plots)
 
     print("Analysis complete!")
 
