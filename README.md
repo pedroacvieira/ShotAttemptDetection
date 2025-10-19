@@ -28,10 +28,11 @@ The goal is not to achieve perfect accuracy but to demonstrate a **reasonable, e
 │   └── shot_events.json
 │
 ├── shot-attempt-detection/
-│   ├── preprocess.py          # Data loading & synchronization
-│   ├── features.py            # Pose/position feature computation
-│   ├── detect_shots.py        # Heuristic detection algorithm
-│   └── evaluate.py            # Evaluation against ground truth
+│   ├── exploratory_data_analysis.py    # Print and plot data insights
+│   ├── preprocess.py                   # Data loading & synchronization
+│   ├── features.py                     # Pose/position feature computation
+│   ├── detect_shots.py                 # Heuristic detection algorithm
+│   └── evaluate.py                     # Evaluation against ground truth
 │
 ├── output/
 │   └── predicted_shots.csv    # Model output
@@ -46,19 +47,24 @@ The goal is not to achieve perfect accuracy but to demonstrate a **reasonable, e
 
 ### 1. Environment
 ```bash
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
+git clone https://github.com/pedroacvieira/ShotAttemptDetection.git
+cd shot-attempt-detection
+poetry install
 ```
 
-### 2. Run Detection
+### 2. Run EDA (Optional)
 ```bash
-python src/detect_shots.py --detections data/detections.csv --positions data/player_positions.csv --output output/predicted_shots.csv
+poetry run eda --detections data/detections.csv --positions data/player_positions.csv --output output/predicted_shots.csv
 ```
 
-### 3. Evaluate Results
+### 3. Run Detection
 ```bash
-python src/evaluate.py --pred output/predicted_shots.csv --truth data/shot_events.json
+poetry run detect_shots --detections data/detections.csv --positions data/player_positions.csv --output output/predicted_shots.csv
+```
+
+### 4. Evaluate Results
+```bash
+poetry run evaluate --pred output/predicted_shots.csv --truth data/shot_events.json
 ```
 
 ---
