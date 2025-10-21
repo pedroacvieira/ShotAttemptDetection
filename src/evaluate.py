@@ -210,7 +210,7 @@ def plot_temporal_alignment(
 
     plt.tight_layout()
     if save_plots:
-        plt.savefig("output/evaluation_temporal_alignment.png", dpi=150, bbox_inches="tight")
+        plt.savefig("plots/evaluation_temporal_alignment.png", dpi=150, bbox_inches="tight")
     else:
         plt.show()
 
@@ -289,7 +289,7 @@ def evaluate(
             print("\nGenerating evaluation plots...")
             plot_temporal_alignment(pred_df, gt_df, tp_mask, matched_gt_mask, save_plots)
             if save_plots:
-                print("Plots saved to output/evaluation_temporal_alignment.png")
+                print("Plots saved to plots/evaluation_temporal_alignment.png")
 
         # Verbose analysis
         if verbose:
