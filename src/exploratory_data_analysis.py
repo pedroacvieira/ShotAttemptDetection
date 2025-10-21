@@ -265,11 +265,11 @@ def plot_body_movement(
 
     # Calculate heel distance speed (derivative)
     heel_distance_speed = np.abs(heel_distance_smooth.diff()) / player_data["timestamp_s"].diff()
-    heel_distance_speed_smooth = pd.Series(heel_distance_speed).rolling(window=15, min_periods=1).mean()
+    heel_distance_speed_smooth = pd.Series(heel_distance_speed).rolling(window=20, min_periods=1).mean()
 
     # Calculate heel distance acceleration (second derivative)
     heel_distance_acceleration = np.abs(heel_distance_speed_smooth.diff()) / player_data["timestamp_s"].diff()
-    heel_distance_acceleration_smooth = pd.Series(heel_distance_acceleration).rolling(window=10, min_periods=1).mean()
+    heel_distance_acceleration_smooth = pd.Series(heel_distance_acceleration).rolling(window=15, min_periods=1).mean()
 
     axes[1].plot(player_data["timestamp_s"], heel_distance_smooth, "green", alpha=0.7, label="Heel Distance")
     axes[1].plot(player_data["timestamp_s"], heel_distance_speed_smooth, "orange", alpha=0.7, label="Heel Distance Speed")
