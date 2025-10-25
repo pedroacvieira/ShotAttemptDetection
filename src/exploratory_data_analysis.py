@@ -534,6 +534,12 @@ def print_data_summary(
     print(f"  - Duration: {detections_df['timestamp_s'].max() - detections_df['timestamp_s'].min():.1f} s")
     print(f"  - Avg confidence: {detections_df['confidence'].mean():.3f}")
 
+    # Calculate timesteps per player for detections
+    detections_sorted = detections_df.sort_values(["player_id", "timestamp_s"])
+    det_timesteps = detections_sorted.groupby("player_id")["timestamp_s"].diff().dropna()
+    if len(det_timesteps) > 0:
+        print(f"  - Timesteps (per player): min={det_timesteps.min():.4f}s, median={det_timesteps.median():.4f}s, max={det_timesteps.max():.4f}s")
+
     print(f"\nPOSITIONS DATA:")
     print(f"  - Shape: {positions_df.shape}")
     print(f"  - Players: {positions_df['player_id'].nunique()}")
@@ -541,6 +547,12 @@ def print_data_summary(
     print(f"  - Duration: {positions_df['timestamp_s'].max() - positions_df['timestamp_s'].min():.1f} s")
     print(f"  - Court bounds: X=[{positions_df['x in m'].min():.1f}, {positions_df['x in m'].max():.1f}]")
     print(f"                  Y=[{positions_df['y in m'].min():.1f}, {positions_df['y in m'].max():.1f}]")
+
+    # Calculate timesteps per player for positions
+    positions_sorted = positions_df.sort_values(["player_id", "timestamp_s"])
+    pos_timesteps = positions_sorted.groupby("player_id")["timestamp_s"].diff().dropna()
+    if len(pos_timesteps) > 0:
+        print(f"  - Timesteps (per player): min={pos_timesteps.min():.4f}s, median={pos_timesteps.median():.4f}s, max={pos_timesteps.max():.4f}s")
 
     print(f"\nSHOT EVENTS:")
     print(f"  - Total shots: {len(shot_events_df)}")
@@ -560,7 +572,7 @@ def analyze(
     detections: Path = typer.Option("data/detections.csv", help="Path to detections CSV file"),
     positions: Path = typer.Option("data/player_positions.csv", help="Path to positions CSV file"),
     shots: Path = typer.Option("data/shot_events.json", help="Path to shot events JSON file"),
-    player_focus: Optional[int] = typer.Option(None, help="Focus analysis on specific player ID"),
+    player_focus: Optional[str] = typer.Option(None, help="Focus analysis on specific player ID"),
     save_plots: bool = typer.Option(True, help="Save plots instead of displaying them"),
 ):
     """
@@ -578,42 +590,26 @@ def analyze(
     # Print summary
     print_data_summary(detections_df, positions_df, shot_events_df)
 
-    print("\nGenerating visualizations...")
-
     # Generate plots
+    print("\nGenerating visualizations...")
     print("  - Data quality overview...")
     plot_data_quality_overview(detections_df, positions_df, save_plots)
-
     print("  - Shot timing analysis...")
     plot_shot_timing_analysis(shot_events_df, save_plots)
 
-    # Player trajectories analysis
-    if player_focus is not None:
-        print(f"  - Trajectory analysis for player {player_focus}...")
-        plot_player_trajectories(positions_df, shot_events_df, player_focus, save_plots)
-    else:
-        # Analyze the player with most position data
-        top_player = positions_df["player_id"].value_counts().index[0]
-        print(f"  - Trajectory analysis for most active player ({top_player})...")
-        plot_player_trajectories(positions_df, shot_events_df, top_player, save_plots)
-
     # Player-specific analysis
-    if player_focus is not None:
-        print(f"  - Position comparison analysis for player {player_focus}...")
-        plot_player_positions(detections_df, positions_df, shot_events_df, player_focus, save_plots)
-        print(f"  - Hand movement analysis for player {player_focus}...")
-        plot_hand_movement(detections_df, shot_events_df, player_focus, save_plots)
-        print(f"  - Body movement analysis for player {player_focus}...")
-        plot_body_movement(detections_df, shot_events_df, player_focus, save_plots)
-    else:
-        # Analyze the player with most detections
-        top_player = detections_df["player_id"].value_counts().index[0]
-        print(f"  - Position comparison analysis for most active player ({top_player})...")
-        plot_player_positions(detections_df, positions_df, shot_events_df, top_player, save_plots)
-        print(f"  - Hand movement analysis for most active player ({top_player})...")
-        plot_hand_movement(detections_df, shot_events_df, top_player, save_plots)
-        print(f"  - Body movement analysis for most active player ({top_player})...")
-        plot_body_movement(detections_df, shot_events_df, top_player, save_plots)
+    if player_focus is None:
+        player_focus = detections_df["player_id"].value_counts().index[0]
+        print(f"  - [Selecting most active player ID for visualization: {player_focus}]")
+
+    print(f"  - Trajectory analysis for player {player_focus}...")
+    plot_player_trajectories(positions_df, shot_events_df, player_focus, save_plots)
+    print(f"  - Position comparison analysis for player {player_focus}...")
+    plot_player_positions(detections_df, positions_df, shot_events_df, player_focus, save_plots)
+    print(f"  - Hand movement analysis for player {player_focus}...")
+    plot_hand_movement(detections_df, shot_events_df, player_focus, save_plots)
+    print(f"  - Body movement analysis for player {player_focus}...")
+    plot_body_movement(detections_df, shot_events_df, player_focus, save_plots)
 
     print("Analysis complete!")
 
