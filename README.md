@@ -84,13 +84,26 @@ All data are synchronized on timestamp (ms).
 
 ### 2. Feature Engineering
 
-For each player over time:
-- **Vertical motion**: difference in y-coordinates of hands over time
-  → Detects upward motion compared to head/hip.
-Lower body stability (hip vs. feet)
-- **Player velocity**: computed from position deltas  
-  → Shots usually occur when horizontal motion is low.  
-- **Temporal smoothing**: rolling median to reduce noise.
+For each player over time, the following features are extracted from skeletal keypoint data:
+
+**Hand Movement Features:**
+- **Hand Y relative to head**: Vertical position of left/right hands compared to face position
+- **Hand Y velocity relative to hip**: Speed of vertical hand movement relative to hip center
+- **Hand distance**: Euclidean distance between left and right hands (arm separation)
+
+**Body Stability Features:**
+- **Hip Y speed**: Vertical movement speed of hip center
+- **Heel distance**: Distance between heels normalized by bounding box height
+
+**Normalized Position Features:**
+- **Hand Y to bbox**: Hand positions relative to bounding box (normalized)
+- **Hip Y to bbox**: Hip position relative to bounding box (normalized)
+- **Hand-hip ratio**: Ratio between hand and hip Y positions
+
+**Temporal Dynamics:**
+- **Rolling maximum**: 500ms rolling window maximum for key features to capture temporal patterns
+
+All features are computed per-player to avoid cross-player contamination in time-series calculations.
 
 ---
 
