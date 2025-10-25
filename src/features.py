@@ -11,8 +11,38 @@ import numpy as np
 import typer
 from pathlib import Path
 from typing import Optional
+from scipy.signal import savgol_filter
 
 from src.preprocess import load_data
+
+
+def apply_savgol_smoothing(df: pd.DataFrame, columns: list, window_length: int = 7, polyorder: int = 2) -> pd.DataFrame:
+    """Apply Savitzky-Golay filter to smooth data per player.
+
+    Args:
+        df: DataFrame with player_id and columns to smooth
+        columns: List of column names to apply smoothing to
+        window_length: Length of filter window (must be odd, default: 7)
+        polyorder: Order of polynomial (default: 2)
+
+    Returns:
+        DataFrame with smoothed columns
+    """
+    result_df = df.copy()
+
+    # Apply smoothing per player to avoid cross-player contamination
+    for player_id in df["player_id"].unique():
+        player_mask = df["player_id"] == player_id
+        player_data = df[player_mask].copy()
+        player_data = player_data.sort_values("timestamp_s")
+
+        for col in columns:
+            if col in player_data.columns and len(player_data) >= window_length:
+                # Apply Savitzky-Golay filter
+                smoothed = savgol_filter(player_data[col].values, window_length, polyorder)
+                result_df.loc[player_mask, col] = smoothed
+
+    return result_df
 
 
 def extract_hand_y_rel_head(detections_df: pd.DataFrame) -> pd.DataFrame:
@@ -20,6 +50,10 @@ def extract_hand_y_rel_head(detections_df: pd.DataFrame) -> pd.DataFrame:
     features_df = detections_df.copy()
     features_df["left_hand_y_rel_head"] = detections_df["left-hand-y"] - detections_df["face-y"]
     features_df["right_hand_y_rel_head"] = detections_df["right-hand-y"] - detections_df["face-y"]
+
+    # Apply smoothing to positional features
+    features_df = apply_savgol_smoothing(features_df, ["left_hand_y_rel_head", "right_hand_y_rel_head"])
+
     return features_df[["player_id", "timestamp_s", "left_hand_y_rel_head", "right_hand_y_rel_head"]]
 
 
@@ -57,6 +91,9 @@ def extract_hand_distance(detections_df: pd.DataFrame) -> pd.DataFrame:
         (detections_df["left-hand-y"] - detections_df["right-hand-y"]) ** 2
     )
 
+    # Apply smoothing to positional feature
+    features_df = apply_savgol_smoothing(features_df, ["hand_distance"])
+
     return features_df[["player_id", "timestamp_s", "hand_distance"]]
 
 
@@ -91,6 +128,9 @@ def extract_heel_distance(detections_df: pd.DataFrame) -> pd.DataFrame:
     bbox_height = detections_df["bbox-ul-y"] - detections_df["bbox-lr-y"]
     features_df["heel_distance"] = np.abs(raw_heel_distance / bbox_height)
 
+    # Apply smoothing to positional feature
+    features_df = apply_savgol_smoothing(features_df, ["heel_distance"])
+
     return features_df[["player_id", "timestamp_s", "heel_distance"]]
 
 
@@ -105,6 +145,9 @@ def extract_hand_y_to_bbox(detections_df: pd.DataFrame) -> pd.DataFrame:
     features_df["left_hand_y_to_bbox"] = (detections_df["left-hand-y"] - bbox_top) / bbox_height
     features_df["right_hand_y_to_bbox"] = (detections_df["right-hand-y"] - bbox_top) / bbox_height
 
+    # Apply smoothing to positional features
+    features_df = apply_savgol_smoothing(features_df, ["left_hand_y_to_bbox", "right_hand_y_to_bbox"])
+
     return features_df[["player_id", "timestamp_s", "left_hand_y_to_bbox", "right_hand_y_to_bbox"]]
 
 
@@ -117,6 +160,9 @@ def extract_hip_y_to_bbox(detections_df: pd.DataFrame) -> pd.DataFrame:
 
     # Calculate hip position relative to bounding box (normalized)
     features_df["hip_y_to_bbox"] = (detections_df["hip-center-y"] - bbox_top) / bbox_height
+
+    # Apply smoothing to positional feature
+    features_df = apply_savgol_smoothing(features_df, ["hip_y_to_bbox"])
 
     return features_df[["player_id", "timestamp_s", "hip_y_to_bbox"]]
 
@@ -131,6 +177,9 @@ def extract_hand_hip_ratio(detections_df: pd.DataFrame) -> pd.DataFrame:
 
     features_df["left_hand_hip_ratio"] = detections_df["left-hand-y"] / (hip_y + epsilon)
     features_df["right_hand_hip_ratio"] = detections_df["right-hand-y"] / (hip_y + epsilon)
+
+    # Apply smoothing to positional features
+    features_df = apply_savgol_smoothing(features_df, ["left_hand_hip_ratio", "right_hand_hip_ratio"])
 
     return features_df[["player_id", "timestamp_s", "left_hand_hip_ratio", "right_hand_hip_ratio"]]
 
