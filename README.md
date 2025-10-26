@@ -88,12 +88,13 @@ For each player over time, the following features are extracted from skeletal ke
 
 **Hand Movement Features:**
 - **Hand Y relative to head**: Vertical position of left/right hands compared to face position
-- **Hand Y velocity relative to hip**: Speed of vertical hand movement relative to hip center
+- **Hand Y velocity relative to head**: Speed of vertical hand movement relative to head
 - **Hand distance**: Euclidean distance between left and right hands (arm separation)
 
 **Body Stability Features:**
-- **Hip Y speed**: Vertical movement speed of hip center
+- **Hip speed to bbox**: Hip speed normalized by bounding box height
 - **Heel distance**: Distance between heels normalized by bounding box height
+- **Player absolute speed**: XY speed computed from player position data
 
 **Normalized Position Features:**
 - **Hand Y to bbox**: Hand positions relative to bounding box (normalized)

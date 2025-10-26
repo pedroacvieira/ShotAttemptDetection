@@ -9,7 +9,6 @@ the patterns and characteristics of the dataset.
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-import numpy as np
 import typer
 from pathlib import Path
 from typing import Optional
@@ -21,28 +20,11 @@ from src.features import extract_features_for_player
 app = typer.Typer(help="Exploratory Data Analysis for Shot Attempt Detection")
 
 
-def plot_player_trajectories(positions_df: pd.DataFrame, shot_events_df: pd.DataFrame, player_id: str, save_plots: bool = True):
-    """Plot specific player's speed over time with shot event markers."""
-    # Filter data for the specific player
-    player_data = positions_df[positions_df["player_id"] == player_id].copy()
-
-    if player_data.empty:
-        print(f"No position data found for player {player_id}")
+def plot_limb_distances(features_df: pd.DataFrame, shot_events_df: pd.DataFrame, player_id: str = "0", rolling_window_ms: float = 500.0, save_plots: bool = True):
+    """Plot hand distance and heel distance over time for a specific player."""
+    if features_df.empty:
+        print(f"No data found for player {player_id}")
         return
-
-    # Sort by timestamp
-    player_data = player_data.sort_values("timestamp_s")
-
-    # Calculate speed using X and Y positions
-    player_data["speed"] = np.sqrt(
-        player_data["x in m"].diff()**2 + player_data["y in m"].diff()**2
-    ) / player_data["timestamp_s"].diff()
-
-    # Calculate Y speed (variation in Y dimension)
-    player_data["y_speed"] = np.abs(player_data["y in m"].diff()) / player_data["timestamp_s"].diff()
-
-    # Calculate X speed (variation in X dimension)
-    player_data["x_speed"] = np.abs(player_data["x in m"].diff()) / player_data["timestamp_s"].diff()
 
     # Filter shot events for this specific player
     if not shot_events_df.empty and "player_id" in shot_events_df.columns:
@@ -50,65 +32,75 @@ def plot_player_trajectories(positions_df: pd.DataFrame, shot_events_df: pd.Data
     else:
         player_shots = []
 
-    fig, axes = plt.subplots(3, 1, figsize=(30, 15))
+    fig, axes = plt.subplots(2, 1, figsize=(30, 20))
 
-    # Plot 1: Speed over time
-    axes[0].plot(player_data["timestamp_s"], player_data["speed"], "g-", alpha=0.7, linewidth=2)
-    axes[0].set_title(f"Player {player_id} - Speed Over Time")
+    # Plot 1: Hand distance
+    axes[0].plot(
+        features_df["timestamp_s"],
+        features_df["hand_distance"],
+        label="Hand Distance",
+        alpha=0.7,
+        color="green",
+        linewidth=2
+    )
+    axes[0].plot(
+        features_df["timestamp_s"],
+        features_df[f"hand_distance_rolling_max_{int(rolling_window_ms)}ms"],
+        label=f"Hand Distance (rolling max {int(rolling_window_ms)}ms)",
+        alpha=0.5,
+        linestyle="--",
+        color="darkgreen",
+        linewidth=2
+    )
+    axes[0].set_title(f"Hand Separation (Distance) - Player {player_id}")
     axes[0].set_xlabel("Time (s)")
-    axes[0].set_ylabel("Speed (m/s)")
+    axes[0].set_ylabel("Hand Distance (normalized)")
+    axes[0].legend()
     axes[0].grid(True, alpha=0.3)
 
-    # Mark shot events
+    # Mark shot attempts
     for shot_time in player_shots:
-        axes[0].axvline(x=shot_time, color="red", linestyle=":", alpha=0.8, linewidth=2, label="Shot Event" if shot_time == player_shots[0] else "")
+        axes[0].axvline(x=shot_time, color="red", linestyle="--", alpha=0.7, linewidth=2)
 
-    if len(player_shots) > 0:
-        axes[0].legend()
-
-    # Plot 2: Y speed over time
-    axes[1].plot(player_data["timestamp_s"], player_data["y_speed"], "m-", alpha=0.7, linewidth=2)
-    axes[1].set_title(f"Player {player_id} - Y Speed Over Time")
+    # Plot 2: Heel distance
+    axes[1].plot(
+        features_df["timestamp_s"],
+        features_df["heel_distance"],
+        label="Heel Distance (normalized)",
+        alpha=0.7,
+        color="purple",
+        linewidth=2
+    )
+    axes[1].plot(
+        features_df["timestamp_s"],
+        features_df[f"heel_distance_rolling_max_{int(rolling_window_ms)}ms"],
+        label=f"Heel Distance (rolling max {int(rolling_window_ms)}ms)",
+        alpha=0.5,
+        linestyle="--",
+        color="indigo",
+        linewidth=2
+    )
+    axes[1].set_title(f"Heel Distance - Player {player_id}")
     axes[1].set_xlabel("Time (s)")
-    axes[1].set_ylabel("Y Speed (m/s)")
+    axes[1].set_ylabel("Distance (normalized by bbox height)")
+    axes[1].legend()
     axes[1].grid(True, alpha=0.3)
 
-    # Mark shot events
+    # Mark shot attempts
     for shot_time in player_shots:
-        axes[1].axvline(x=shot_time, color="red", linestyle=":", alpha=0.8, linewidth=2, label="Shot Event" if shot_time == player_shots[0] else "")
-
-    if len(player_shots) > 0:
-        axes[1].legend()
-
-    # Plot 3: X speed over time
-    axes[2].plot(player_data["timestamp_s"], player_data["x_speed"], "b-", alpha=0.7, linewidth=2)
-    axes[2].set_title(f"Player {player_id} - X Speed Over Time")
-    axes[2].set_xlabel("Time (s)")
-    axes[2].set_ylabel("X Speed (m/s)")
-    axes[2].grid(True, alpha=0.3)
-
-    # Mark shot events
-    for shot_time in player_shots:
-        axes[2].axvline(x=shot_time, color="red", linestyle=":", alpha=0.8, linewidth=2, label="Shot Event" if shot_time == player_shots[0] else "")
-
-    if len(player_shots) > 0:
-        axes[2].legend()
+        axes[1].axvline(x=shot_time, color="red", linestyle="--", alpha=0.7, linewidth=2)
 
     plt.tight_layout()
-
     if save_plots:
-        plt.savefig(f"plots/player_{player_id}_trajectories.png")
+        plt.savefig(f"plots/player_{player_id}_limb_distances.png")
     else:
         plt.show()
 
 
-def plot_hand_movement(
-    detections_df: pd.DataFrame, shot_events_df: pd.DataFrame, player_id: str = "0", save_plots: bool = True
+def plot_hand_rel_body(
+    features_df: pd.DataFrame, shot_events_df: pd.DataFrame, player_id: str = "0", rolling_window_ms: float = 500.0, save_plots: bool = True
 ):
-    """Plot hand movement patterns over time for a specific player using extracted features."""
-    # Extract features for the player
-    features_df = extract_features_for_player(detections_df, player_id, rolling_window_ms=500.0)
-
+    """Plot hand positions and velocities relative to body (head) and hand-hip ratios."""
     if features_df.empty:
         print(f"No data found for player {player_id}")
         return
@@ -127,30 +119,34 @@ def plot_hand_movement(
         features_df["left_hand_y_rel_head"],
         label="Left Hand Y rel. Head",
         alpha=0.7,
-        color="blue"
+        color="blue",
+        linewidth=2
     )
     axes[0].plot(
         features_df["timestamp_s"],
         features_df["right_hand_y_rel_head"],
         label="Right Hand Y rel. Head",
         alpha=0.7,
-        color="orange"
+        color="orange",
+        linewidth=2
     )
     axes[0].plot(
         features_df["timestamp_s"],
-        features_df["left_hand_y_rel_head_rolling_max_500ms"],
-        label="Left Hand Y rel. Head (rolling max)",
+        features_df[f"left_hand_y_rel_head_rolling_max_{int(rolling_window_ms)}ms"],
+        label=f"Left Hand Y rel. Head (rolling max {int(rolling_window_ms)}ms)",
         alpha=0.5,
         linestyle="--",
-        color="darkblue"
+        color="darkblue",
+        linewidth=2
     )
     axes[0].plot(
         features_df["timestamp_s"],
-        features_df["right_hand_y_rel_head_rolling_max_500ms"],
-        label="Right Hand Y rel. Head (rolling max)",
+        features_df[f"right_hand_y_rel_head_rolling_max_{int(rolling_window_ms)}ms"],
+        label=f"Right Hand Y rel. Head (rolling max {int(rolling_window_ms)}ms)",
         alpha=0.5,
         linestyle="--",
-        color="darkorange"
+        color="darkorange",
+        linewidth=2
     )
     axes[0].set_title(f"Hand Y Position relative to Head - Player {player_id}")
     axes[0].set_xlabel("Time (s)")
@@ -162,25 +158,44 @@ def plot_hand_movement(
     for shot_time in player_shots:
         axes[0].axvline(x=shot_time, color="red", linestyle="--", alpha=0.7, linewidth=2)
 
-    # Plot 2: Hand separation (distance)
+    # Plot 2: Hand Y velocity relative to head
     axes[1].plot(
         features_df["timestamp_s"],
-        features_df["hand_distance"],
-        label="Hand Distance",
+        features_df["left_hand_y_velocity_rel_head"],
+        label="Left Hand Y Velocity (rel. Head)",
         alpha=0.7,
-        color="green"
+        color="blue",
+        linewidth=2
     )
     axes[1].plot(
         features_df["timestamp_s"],
-        features_df["hand_distance_rolling_max_500ms"],
-        label="Hand Distance (rolling max)",
+        features_df["right_hand_y_velocity_rel_head"],
+        label="Right Hand Y Velocity (rel. Head)",
+        alpha=0.7,
+        color="purple",
+        linewidth=2
+    )
+    axes[1].plot(
+        features_df["timestamp_s"],
+        features_df[f"left_hand_y_velocity_rel_head_rolling_max_{int(rolling_window_ms)}ms"],
+        label=f"Left Hand Y Velocity (rolling max {int(rolling_window_ms)}ms)",
         alpha=0.5,
         linestyle="--",
-        color="darkgreen"
+        color="darkblue",
+        linewidth=2
     )
-    axes[1].set_title(f"Hand Separation (Distance) - Player {player_id}")
+    axes[1].plot(
+        features_df["timestamp_s"],
+        features_df[f"right_hand_y_velocity_rel_head_rolling_max_{int(rolling_window_ms)}ms"],
+        label=f"Right Hand Y Velocity (rolling max {int(rolling_window_ms)}ms)",
+        alpha=0.5,
+        linestyle="--",
+        color="indigo",
+        linewidth=2
+    )
+    axes[1].set_title(f"Hand Y Velocity relative to Head - Player {player_id}")
     axes[1].set_xlabel("Time (s)")
-    axes[1].set_ylabel("Hand Distance (normalized)")
+    axes[1].set_ylabel("Y Velocity (normalized)")
     axes[1].legend()
     axes[1].grid(True, alpha=0.3)
 
@@ -188,40 +203,26 @@ def plot_hand_movement(
     for shot_time in player_shots:
         axes[1].axvline(x=shot_time, color="red", linestyle="--", alpha=0.7, linewidth=2)
 
-    # Plot 3: Hand Y velocity relative to hip
+    # Plot 3: Hand-hip ratios
     axes[2].plot(
         features_df["timestamp_s"],
-        features_df["left_hand_y_velocity_rel_hip"],
-        label="Left Hand Y Velocity (rel. Hip)",
+        features_df["left_hand_hip_ratio"],
+        label="Left Hand / Hip Ratio",
         alpha=0.7,
-        color="blue"
+        color="blue",
+        linewidth=2
     )
     axes[2].plot(
         features_df["timestamp_s"],
-        features_df["right_hand_y_velocity_rel_hip"],
-        label="Right Hand Y Velocity (rel. Hip)",
+        features_df["right_hand_hip_ratio"],
+        label="Right Hand / Hip Ratio",
         alpha=0.7,
-        color="purple"
+        color="purple",
+        linewidth=2
     )
-    axes[2].plot(
-        features_df["timestamp_s"],
-        features_df["left_hand_y_velocity_rel_hip_rolling_max_500ms"],
-        label="Left Hand Y Velocity (rolling max)",
-        alpha=0.5,
-        linestyle="--",
-        color="darkblue"
-    )
-    axes[2].plot(
-        features_df["timestamp_s"],
-        features_df["right_hand_y_velocity_rel_hip_rolling_max_500ms"],
-        label="Right Hand Y Velocity (rolling max)",
-        alpha=0.5,
-        linestyle="--",
-        color="indigo"
-    )
-    axes[2].set_title(f"Hand Y Velocity relative to Hip - Player {player_id}")
+    axes[2].set_title(f"Hand-Hip Position Ratios - Player {player_id}")
     axes[2].set_xlabel("Time (s)")
-    axes[2].set_ylabel("Y Velocity (normalized)")
+    axes[2].set_ylabel("Ratio")
     axes[2].legend()
     axes[2].grid(True, alpha=0.3)
 
@@ -231,18 +232,15 @@ def plot_hand_movement(
 
     plt.tight_layout()
     if save_plots:
-        plt.savefig(f"plots/player_{player_id}_hand_movement.png")
+        plt.savefig(f"plots/player_{player_id}_hand_rel_body.png")
     else:
         plt.show()
 
 
-def plot_body_movement(
-    detections_df: pd.DataFrame, shot_events_df: pd.DataFrame, player_id: str = "0", save_plots: bool = True
+def plot_hand_rel_bbox(
+    features_df: pd.DataFrame, shot_events_df: pd.DataFrame, player_id: str = "0", save_plots: bool = True
 ):
-    """Plot body movement patterns (hips and heels) over time for a specific player using extracted features."""
-    # Extract features for the player
-    features_df = extract_features_for_player(detections_df, player_id, rolling_window_ms=500.0)
-
+    """Plot hand Y positions relative to bounding box for a specific player."""
     if features_df.empty:
         print(f"No data found for player {player_id}")
         return
@@ -255,132 +253,35 @@ def plot_body_movement(
 
     fig, axes = plt.subplots(2, 1, figsize=(30, 20))
 
-    # Plot 1: Hip Y speed
+    # Plot 1: Left Hand Y position relative to bbox
     axes[0].plot(
-        features_df["timestamp_s"],
-        features_df["hip_y_speed"],
-        label="Hip Y Speed",
-        alpha=0.7,
-        color="blue"
-    )
-    axes[0].plot(
-        features_df["timestamp_s"],
-        features_df["hip_y_speed_rolling_max_500ms"],
-        label="Hip Y Speed (rolling max)",
-        alpha=0.5,
-        linestyle="--",
-        color="darkblue"
-    )
-    axes[0].set_title(f"Hip Y Speed - Player {player_id}")
-    axes[0].set_xlabel("Time (s)")
-    axes[0].set_ylabel("Speed (normalized)")
-    axes[0].legend()
-    axes[0].grid(True, alpha=0.3)
-
-    # Mark shot attempts
-    for shot_time in player_shots:
-        axes[0].axvline(x=shot_time, color="red", linestyle="--", alpha=0.7, linewidth=2)
-
-    # Plot 2: Heel distance (normalized)
-    axes[1].plot(
-        features_df["timestamp_s"],
-        features_df["heel_distance"],
-        label="Heel Distance (normalized)",
-        alpha=0.7,
-        color="green"
-    )
-    axes[1].plot(
-        features_df["timestamp_s"],
-        features_df["heel_distance_rolling_max_500ms"],
-        label="Heel Distance (rolling max)",
-        alpha=0.5,
-        linestyle="--",
-        color="darkgreen"
-    )
-    axes[1].set_title(f"Heel Distance - Player {player_id}")
-    axes[1].set_xlabel("Time (s)")
-    axes[1].set_ylabel("Distance (normalized by bbox height)")
-    axes[1].legend()
-    axes[1].grid(True, alpha=0.3)
-
-    # Mark shot attempts
-    for shot_time in player_shots:
-        axes[1].axvline(x=shot_time, color="red", linestyle="--", alpha=0.7, linewidth=2)
-
-    plt.tight_layout()
-    if save_plots:
-        plt.savefig(f"plots/player_{player_id}_body_movement.png")
-    else:
-        plt.show()
-
-
-def plot_player_positions(
-    detections_df: pd.DataFrame, positions_df: pd.DataFrame, shot_events_df: pd.DataFrame, player_id: str = "0", save_plots: bool = True
-):
-    """Plot extracted feature ratios and normalized positions for a specific player."""
-    # Extract features for the player
-    features_df = extract_features_for_player(detections_df, player_id, rolling_window_ms=500.0)
-
-    if features_df.empty:
-        print(f"No data found for player {player_id}")
-        return
-
-    # Filter shot events for this specific player
-    if not shot_events_df.empty and "player_id" in shot_events_df.columns:
-        player_shots = shot_events_df[shot_events_df["player_id"] == player_id]["timestamp_s"].values
-    else:
-        player_shots = []
-
-    fig, axes = plt.subplots(2, 1, figsize=(30, 20))
-
-    # Plot 1: Hand-hip ratios
-    axes[0].plot(
-        features_df["timestamp_s"],
-        features_df["left_hand_hip_ratio"],
-        label="Left Hand / Hip Ratio",
-        alpha=0.7,
-        color="blue"
-    )
-    axes[0].plot(
-        features_df["timestamp_s"],
-        features_df["right_hand_hip_ratio"],
-        label="Right Hand / Hip Ratio",
-        alpha=0.7,
-        color="purple"
-    )
-    axes[0].set_title(f"Hand-Hip Position Ratios - Player {player_id}")
-    axes[0].set_xlabel("Time (s)")
-    axes[0].set_ylabel("Ratio")
-    axes[0].legend()
-    axes[0].grid(True, alpha=0.3)
-
-    # Mark shot attempts
-    for shot_time in player_shots:
-        axes[0].axvline(x=shot_time, color="red", linestyle="--", alpha=0.7, linewidth=2)
-
-    # Plot 2: All normalized position features together
-    axes[1].plot(
         features_df["timestamp_s"],
         features_df["left_hand_y_to_bbox"],
         label="Left Hand Y to Bbox",
         alpha=0.7,
-        color="blue"
+        color="blue",
+        linewidth=2
     )
+    axes[0].set_title(f"Left Hand Y Position (relative to Bounding Box) - Player {player_id}")
+    axes[0].set_xlabel("Time (s)")
+    axes[0].set_ylabel("Normalized Position")
+    axes[0].legend()
+    axes[0].grid(True, alpha=0.3)
+
+    # Mark shot attempts
+    for shot_time in player_shots:
+        axes[0].axvline(x=shot_time, color="red", linestyle="--", alpha=0.7, linewidth=2)
+
+    # Plot 2: Right Hand Y position relative to bbox
     axes[1].plot(
         features_df["timestamp_s"],
         features_df["right_hand_y_to_bbox"],
         label="Right Hand Y to Bbox",
         alpha=0.7,
-        color="purple"
+        color="purple",
+        linewidth=2
     )
-    axes[1].plot(
-        features_df["timestamp_s"],
-        features_df["hip_y_to_bbox"],
-        label="Hip Y to Bbox",
-        alpha=0.7,
-        color="orange"
-    )
-    axes[1].set_title(f"Normalized Y Positions (relative to Bounding Box) - Player {player_id}")
+    axes[1].set_title(f"Right Hand Y Position (relative to Bounding Box) - Player {player_id}")
     axes[1].set_xlabel("Time (s)")
     axes[1].set_ylabel("Normalized Position")
     axes[1].legend()
@@ -392,7 +293,128 @@ def plot_player_positions(
 
     plt.tight_layout()
     if save_plots:
-        plt.savefig(f"plots/player_{player_id}_positions.png")
+        plt.savefig(f"plots/player_{player_id}_hand_rel_bbox.png")
+    else:
+        plt.show()
+
+
+def plot_hip_rel_bbox(
+    features_df: pd.DataFrame, shot_events_df: pd.DataFrame, player_id: str = "0", rolling_window_ms: float = 500.0, save_plots: bool = True
+):
+    """Plot hip Y position and speed relative to bounding box for a specific player."""
+    if features_df.empty:
+        print(f"No data found for player {player_id}")
+        return
+
+    # Filter shot events for this specific player
+    if not shot_events_df.empty and "player_id" in shot_events_df.columns:
+        player_shots = shot_events_df[shot_events_df["player_id"] == player_id]["timestamp_s"].values
+    else:
+        player_shots = []
+
+    fig, axes = plt.subplots(2, 1, figsize=(30, 20))
+
+    # Plot 1: Hip Y position to bbox
+    axes[0].plot(
+        features_df["timestamp_s"],
+        features_df["hip_y_to_bbox"],
+        label="Hip Y to Bbox",
+        alpha=0.7,
+        color="orange",
+        linewidth=2
+    )
+    axes[0].set_title(f"Hip Y Position (relative to Bounding Box) - Player {player_id}")
+    axes[0].set_xlabel("Time (s)")
+    axes[0].set_ylabel("Normalized Position")
+    axes[0].legend()
+    axes[0].grid(True, alpha=0.3)
+
+    # Mark shot attempts
+    for shot_time in player_shots:
+        axes[0].axvline(x=shot_time, color="red", linestyle="--", alpha=0.7, linewidth=2)
+
+    # Plot 2: Hip speed to bbox
+    axes[1].plot(
+        features_df["timestamp_s"],
+        features_df["hip_speed_to_bbox"],
+        label="Hip Speed (norm. by bbox)",
+        alpha=0.7,
+        color="blue",
+        linewidth=2
+    )
+    axes[1].plot(
+        features_df["timestamp_s"],
+        features_df[f"hip_speed_to_bbox_rolling_max_{int(rolling_window_ms)}ms"],
+        label=f"Hip Speed (rolling max {int(rolling_window_ms)}ms)",
+        alpha=0.5,
+        linestyle="--",
+        color="darkblue",
+        linewidth=2
+    )
+    axes[1].set_title(f"Hip Speed (normalized by BBox Height) - Player {player_id}")
+    axes[1].set_xlabel("Time (s)")
+    axes[1].set_ylabel("Speed (normalized)")
+    axes[1].legend()
+    axes[1].grid(True, alpha=0.3)
+
+    # Mark shot attempts
+    for shot_time in player_shots:
+        axes[1].axvline(x=shot_time, color="red", linestyle="--", alpha=0.7, linewidth=2)
+
+    plt.tight_layout()
+    if save_plots:
+        plt.savefig(f"plots/player_{player_id}_hip_rel_bbox.png")
+    else:
+        plt.show()
+
+
+def plot_player_speed(
+    features_df: pd.DataFrame, shot_events_df: pd.DataFrame, player_id: str = "0", rolling_window_ms: float = 500.0, save_plots: bool = True
+):
+    """Plot player absolute speed (XY) over time for a specific player."""
+    if features_df.empty:
+        print(f"No data found for player {player_id}")
+        return
+
+    # Filter shot events for this specific player
+    if not shot_events_df.empty and "player_id" in shot_events_df.columns:
+        player_shots = shot_events_df[shot_events_df["player_id"] == player_id]["timestamp_s"].values
+    else:
+        player_shots = []
+
+    fig, ax = plt.subplots(1, 1, figsize=(30, 10))
+
+    # Plot: Player absolute speed
+    ax.plot(
+        features_df["timestamp_s"],
+        features_df["player_abs_speed"],
+        label="Player Absolute Speed",
+        alpha=0.7,
+        color="green",
+        linewidth=2
+    )
+    ax.plot(
+        features_df["timestamp_s"],
+        features_df[f"player_abs_speed_rolling_max_{int(rolling_window_ms)}ms"],
+        label=f"Player Speed (rolling max {int(rolling_window_ms)}ms)",
+        alpha=0.5,
+        linestyle="--",
+        color="darkgreen",
+        linewidth=2
+    )
+    ax.set_title(f"Player Absolute Speed (XY) - Player {player_id}")
+    ax.set_xlabel("Time (s)")
+    ax.set_ylabel("Speed (m/s)")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+
+    # Mark shot attempts
+    for shot_time in player_shots:
+        ax.axvline(x=shot_time, color="red", linestyle="--", alpha=0.7, linewidth=2)
+
+    plt.tight_layout()
+    if save_plots:
+        plt.savefig(f"plots/player_{player_id}_player_speed.png")
     else:
         plt.show()
 
@@ -579,14 +601,28 @@ def analyze(
         player_id = str(detections_df["player_id"].value_counts().index[0])
         print(f"  - [Selecting most active player ID for visualization: {player_id}]")
 
-    print(f"  - Trajectory analysis for player {player_id}...")
-    plot_player_trajectories(positions_df, shot_events_df, player_id, save_plots)
-    print(f"  - Position comparison analysis for player {player_id}...")
-    plot_player_positions(detections_df, positions_df, shot_events_df, player_id, save_plots)
-    print(f"  - Hand movement analysis for player {player_id}...")
-    plot_hand_movement(detections_df, shot_events_df, player_id, save_plots)
-    print(f"  - Body movement analysis for player {player_id}...")
-    plot_body_movement(detections_df, shot_events_df, player_id, save_plots)
+    # Extract features once for the selected player
+    rolling_window_ms = 1000.0
+    print(f"  - Extracting features for player {player_id} (rolling window: {int(rolling_window_ms)}ms)...")
+    features_df = extract_features_for_player(detections_df, player_id, positions_df, rolling_window_ms=rolling_window_ms)
+
+    if features_df.empty:
+        print(f"ERROR: No features could be extracted for player {player_id}")
+        return
+
+    print(f"    Features extracted: {features_df.shape[0]} samples, {features_df.shape[1]} features")
+
+    # Generate all plots using the extracted features
+    print(f"  - Player speed analysis for player {player_id}...")
+    plot_player_speed(features_df, shot_events_df, player_id, rolling_window_ms, save_plots)
+    print(f"  - Limb distances analysis for player {player_id}...")
+    plot_limb_distances(features_df, shot_events_df, player_id, rolling_window_ms, save_plots)
+    print(f"  - Hand relative to body analysis for player {player_id}...")
+    plot_hand_rel_body(features_df, shot_events_df, player_id, rolling_window_ms, save_plots)
+    print(f"  - Hand relative to bbox analysis for player {player_id}...")
+    plot_hand_rel_bbox(features_df, shot_events_df, player_id, save_plots)
+    print(f"  - Hip relative to bbox analysis for player {player_id}...")
+    plot_hip_rel_bbox(features_df, shot_events_df, player_id, rolling_window_ms, save_plots)
 
     print("Analysis complete!")
 

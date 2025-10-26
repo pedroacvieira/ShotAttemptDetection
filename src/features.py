@@ -16,13 +16,13 @@ from scipy.signal import savgol_filter
 from src.preprocess import load_data
 
 
-def apply_savgol_smoothing(df: pd.DataFrame, columns: list, window_length: int = 7, polyorder: int = 2) -> pd.DataFrame:
+def apply_savgol_smoothing(df: pd.DataFrame, columns: list, window_length: int = 10, polyorder: int = 2) -> pd.DataFrame:
     """Apply Savitzky-Golay filter to smooth data per player.
 
     Args:
         df: DataFrame with player_id and columns to smooth
         columns: List of column names to apply smoothing to
-        window_length: Length of filter window (must be odd, default: 7)
+        window_length: Length of filter window (must be odd, default: 10)
         polyorder: Order of polynomial (default: 2)
 
     Returns:
@@ -57,29 +57,26 @@ def extract_hand_y_rel_head(detections_df: pd.DataFrame) -> pd.DataFrame:
     return features_df[["player_id", "timestamp_s", "left_hand_y_rel_head", "right_hand_y_rel_head"]]
 
 
-def extract_hand_y_velocity_rel_hip(detections_df: pd.DataFrame) -> pd.DataFrame:
-    """Extract hand Y velocity relative to hip."""
-    features_df = detections_df.copy()
+def extract_hand_y_velocity_rel_head(detections_df: pd.DataFrame) -> pd.DataFrame:
+    """Extract hand Y velocity relative to head."""
+    # First get hand positions relative to head using existing function
+    hand_rel_head_df = extract_hand_y_rel_head(detections_df)
 
     # Sort by player and timestamp
-    features_df = features_df.sort_values(["player_id", "timestamp_s"])
-
-    # Calculate hand positions relative to hip
-    features_df["left_hand_rel_hip"] = features_df["left-hand-y"] - features_df["hip-center-y"]
-    features_df["right_hand_rel_hip"] = features_df["right-hand-y"] - features_df["hip-center-y"]
+    features_df = hand_rel_head_df.sort_values(["player_id", "timestamp_s"])
 
     # Calculate time differences per player
     features_df["time_diff"] = features_df.groupby("player_id")["timestamp_s"].diff()
 
     # Calculate position differences per player
-    features_df["left_hand_rel_hip_diff"] = features_df.groupby("player_id")["left_hand_rel_hip"].diff()
-    features_df["right_hand_rel_hip_diff"] = features_df.groupby("player_id")["right_hand_rel_hip"].diff()
+    features_df["left_hand_rel_head_diff"] = features_df.groupby("player_id")["left_hand_y_rel_head"].diff()
+    features_df["right_hand_rel_head_diff"] = features_df.groupby("player_id")["right_hand_y_rel_head"].diff()
 
     # Calculate velocities
-    features_df["left_hand_y_velocity_rel_hip"] = np.abs(features_df["left_hand_rel_hip_diff"]) / features_df["time_diff"]
-    features_df["right_hand_y_velocity_rel_hip"] = np.abs(features_df["right_hand_rel_hip_diff"]) / features_df["time_diff"]
+    features_df["left_hand_y_velocity_rel_head"] = np.abs(features_df["left_hand_rel_head_diff"]) / features_df["time_diff"]
+    features_df["right_hand_y_velocity_rel_head"] = np.abs(features_df["right_hand_rel_head_diff"]) / features_df["time_diff"]
 
-    return features_df[["player_id", "timestamp_s", "left_hand_y_velocity_rel_hip", "right_hand_y_velocity_rel_hip"]]
+    return features_df[["player_id", "timestamp_s", "left_hand_y_velocity_rel_head", "right_hand_y_velocity_rel_head"]]
 
 
 def extract_hand_distance(detections_df: pd.DataFrame) -> pd.DataFrame:
@@ -95,23 +92,6 @@ def extract_hand_distance(detections_df: pd.DataFrame) -> pd.DataFrame:
     features_df = apply_savgol_smoothing(features_df, ["hand_distance"])
 
     return features_df[["player_id", "timestamp_s", "hand_distance"]]
-
-
-def extract_hip_y_speed(detections_df: pd.DataFrame) -> pd.DataFrame:
-    """Extract hip Y speed."""
-    features_df = detections_df.copy()
-
-    # Sort by player and timestamp
-    features_df = features_df.sort_values(["player_id", "timestamp_s"])
-
-    # Calculate time and position differences per player
-    features_df["time_diff"] = features_df.groupby("player_id")["timestamp_s"].diff()
-    features_df["hip_y_diff"] = features_df.groupby("player_id")["hip-center-y"].diff()
-
-    # Calculate hip Y speed
-    features_df["hip_y_speed"] = np.abs(features_df["hip_y_diff"]) / features_df["time_diff"]
-
-    return features_df[["player_id", "timestamp_s", "hip_y_speed"]]
 
 
 def extract_heel_distance(detections_df: pd.DataFrame) -> pd.DataFrame:
@@ -167,6 +147,26 @@ def extract_hip_y_to_bbox(detections_df: pd.DataFrame) -> pd.DataFrame:
     return features_df[["player_id", "timestamp_s", "hip_y_to_bbox"]]
 
 
+def extract_hip_speed_to_bbox(detections_df: pd.DataFrame) -> pd.DataFrame:
+    """Extract hip speed normalized by bounding box height."""
+    features_df = detections_df.copy()
+
+    # Sort by player and timestamp
+    features_df = features_df.sort_values(["player_id", "timestamp_s"])
+
+    # Calculate time and position differences per player
+    features_df["time_diff"] = features_df.groupby("player_id")["timestamp_s"].diff()
+    features_df["hip_y_diff"] = features_df.groupby("player_id")["hip-center-y"].diff()
+
+    # Normalize by bounding box height (take absolute value)
+    bbox_height = np.abs(features_df["bbox-ul-y"] - features_df["bbox-lr-y"])
+
+    # Calculate hip speed normalized by bbox height (absolute value)
+    features_df["hip_speed_to_bbox"] = np.abs(features_df["hip_y_diff"] / (features_df["time_diff"] * bbox_height))
+
+    return features_df[["player_id", "timestamp_s", "hip_speed_to_bbox"]]
+
+
 def extract_hand_hip_ratio(detections_df: pd.DataFrame) -> pd.DataFrame:
     """Extract ratio between hand positions and hip position."""
     features_df = detections_df.copy()
@@ -182,6 +182,49 @@ def extract_hand_hip_ratio(detections_df: pd.DataFrame) -> pd.DataFrame:
     features_df = apply_savgol_smoothing(features_df, ["left_hand_hip_ratio", "right_hand_hip_ratio"])
 
     return features_df[["player_id", "timestamp_s", "left_hand_hip_ratio", "right_hand_hip_ratio"]]
+
+
+def extract_player_abs_speed(detections_df: pd.DataFrame, positions_df: pd.DataFrame) -> pd.DataFrame:
+    """Extract player absolute speed from X and Y position data.
+
+    Args:
+        detections_df: DataFrame with skeletal detection data (for alignment)
+        positions_df: DataFrame with player position data (x in m, y in m)
+
+    Returns:
+        DataFrame with player absolute speed feature
+    """
+    if positions_df is None or positions_df.empty:
+        # Return empty feature if positions data not available
+        result_df = detections_df[["player_id", "timestamp_s"]].copy()
+        result_df["player_abs_speed"] = np.nan
+        return result_df[["player_id", "timestamp_s", "player_abs_speed"]]
+
+    # Calculate speed from positions data
+    positions_features = positions_df.copy()
+    positions_features = positions_features.sort_values(["player_id", "timestamp_s"])
+
+    # Apply smoothing to positional data before computing differences
+    positions_features = apply_savgol_smoothing(positions_features, ["x in m", "y in m"])
+
+    # Calculate time and position differences per player
+    positions_features["time_diff"] = positions_features.groupby("player_id")["timestamp_s"].diff()
+    positions_features["x_diff"] = positions_features.groupby("player_id")["x in m"].diff()
+    positions_features["y_diff"] = positions_features.groupby("player_id")["y in m"].diff()
+
+    # Calculate absolute speed (Euclidean distance / time)
+    positions_features["player_abs_speed"] = np.sqrt(
+        positions_features["x_diff"]**2 + positions_features["y_diff"]**2
+    ) / positions_features["time_diff"]
+
+    # Merge with detections data to align timestamps
+    result_df = detections_df[["player_id", "timestamp_s"]].merge(
+        positions_features[["player_id", "timestamp_s", "player_abs_speed"]],
+        on=["player_id", "timestamp_s"],
+        how="left"
+    )
+
+    return result_df[["player_id", "timestamp_s", "player_abs_speed"]]
 
 
 def apply_rolling_max(features_df: pd.DataFrame, feature_columns: list, window_ms: float = 500.0) -> pd.DataFrame:
@@ -219,11 +262,12 @@ def apply_rolling_max(features_df: pd.DataFrame, feature_columns: list, window_m
     return result_df
 
 
-def extract_all_features(detections_df: pd.DataFrame, rolling_window_ms: float = 500.0) -> pd.DataFrame:
+def extract_all_features(detections_df: pd.DataFrame, positions_df: pd.DataFrame = None, rolling_window_ms: float = 500.0) -> pd.DataFrame:
     """Extract all basketball shot detection features.
 
     Args:
         detections_df: DataFrame with skeletal detection data
+        positions_df: DataFrame with player position data (optional)
         rolling_window_ms: Time window for rolling maximum features (default: 500ms)
 
     Returns:
@@ -234,18 +278,19 @@ def extract_all_features(detections_df: pd.DataFrame, rolling_window_ms: float =
 
     # Extract individual feature sets
     hand_y_rel_head = extract_hand_y_rel_head(detections_df)
-    hand_y_velocity = extract_hand_y_velocity_rel_hip(detections_df)
+    hand_y_velocity = extract_hand_y_velocity_rel_head(detections_df)
     hand_distance = extract_hand_distance(detections_df)
-    hip_y_speed = extract_hip_y_speed(detections_df)
     heel_distance = extract_heel_distance(detections_df)
     hand_y_bbox = extract_hand_y_to_bbox(detections_df)
     hip_y_bbox = extract_hip_y_to_bbox(detections_df)
+    hip_speed = extract_hip_speed_to_bbox(detections_df)
     hand_hip_ratio = extract_hand_hip_ratio(detections_df)
+    player_speed = extract_player_abs_speed(detections_df, positions_df)
 
     # Merge all features
     feature_dfs = [
-        hand_y_rel_head, hand_y_velocity, hand_distance, hip_y_speed,
-        heel_distance, hand_y_bbox, hip_y_bbox, hand_hip_ratio
+        hand_y_rel_head, hand_y_velocity, hand_distance, hip_speed,
+        heel_distance, hand_y_bbox, hip_y_bbox, hand_hip_ratio, player_speed
     ]
 
     for feature_df in feature_dfs:
@@ -258,8 +303,8 @@ def extract_all_features(detections_df: pd.DataFrame, rolling_window_ms: float =
     # Apply rolling maximum to key features
     key_features = [
         "left_hand_y_rel_head", "right_hand_y_rel_head",
-        "left_hand_y_velocity_rel_hip", "right_hand_y_velocity_rel_hip",
-        "hand_distance", "hip_y_speed", "heel_distance"
+        "left_hand_y_velocity_rel_head", "right_hand_y_velocity_rel_head",
+        "hand_distance", "hip_speed_to_bbox", "heel_distance", "player_abs_speed"
     ]
 
     result_df = apply_rolling_max(result_df, key_features, rolling_window_ms)
@@ -271,24 +316,30 @@ def extract_all_features(detections_df: pd.DataFrame, rolling_window_ms: float =
 
 
 def extract_features_for_player(detections_df: pd.DataFrame, player_id: str,
-                              rolling_window_ms: float = 500.0) -> pd.DataFrame:
+                              positions_df: pd.DataFrame = None, rolling_window_ms: float = 500.0) -> pd.DataFrame:
     """Extract features for a specific player.
 
     Args:
         detections_df: DataFrame with skeletal detection data
         player_id: ID of the player to extract features for
+        positions_df: DataFrame with player position data (optional)
         rolling_window_ms: Time window for rolling maximum features (default: 500ms)
 
     Returns:
         DataFrame with features for the specified player
     """
-    player_data = detections_df[detections_df["player_id"] == player_id].copy()
+    player_detections = detections_df[detections_df["player_id"] == player_id].copy()
 
-    if player_data.empty:
+    if player_detections.empty:
         print(f"No data found for player {player_id}")
         return pd.DataFrame()
 
-    return extract_all_features(player_data, rolling_window_ms)
+    # Filter positions for the player if available
+    player_positions = None
+    if positions_df is not None and not positions_df.empty:
+        player_positions = positions_df[positions_df["player_id"] == player_id].copy()
+
+    return extract_all_features(player_detections, player_positions, rolling_window_ms)
 
 
 app = typer.Typer(help="Feature Extraction for Basketball Shot Attempt Detection")
@@ -320,7 +371,7 @@ def extract(
     # Extract features
     if player_id is not None:
         print(f"Extracting features for player {player_id}...")
-        features_df = extract_features_for_player(detections_df, player_id, rolling_window_ms)
+        features_df = extract_features_for_player(detections_df, player_id, positions_df, rolling_window_ms)
 
         if features_df.empty:
             print(f"No data found for player {player_id}")
@@ -329,7 +380,7 @@ def extract(
         print(f"Player {player_id} features shape: {features_df.shape}")
     else:
         print("Extracting features for all players...")
-        features_df = extract_all_features(detections_df, rolling_window_ms)
+        features_df = extract_all_features(detections_df, positions_df, rolling_window_ms)
         print(f"Extracted features shape: {features_df.shape}")
 
     # Display feature information
@@ -376,13 +427,14 @@ def info(
     print("\nAVAILABLE FEATURES:")
     feature_info = {
         "hand_y_rel_head": "Hand Y positions relative to head",
-        "hand_y_velocity_rel_hip": "Hand Y velocity relative to hip center",
+        "hand_y_velocity_rel_head": "Hand Y velocity relative to head",
         "hand_distance": "Distance between left and right hands",
-        "hip_y_speed": "Hip Y movement speed",
         "heel_distance": "Distance between heels (normalized)",
         "hand_y_to_bbox": "Hand Y positions relative to bounding box",
         "hip_y_to_bbox": "Hip Y position relative to bounding box",
+        "hip_speed_to_bbox": "Hip speed normalized by bounding box height",
         "hand_hip_ratio": "Ratio between hand and hip Y positions",
+        "player_abs_speed": "Player absolute speed from X and Y positions",
         "rolling_max_*": "Rolling maximum values over time window"
     }
 
