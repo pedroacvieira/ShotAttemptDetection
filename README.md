@@ -1,17 +1,17 @@
-# 🏀 Shot Attempt Detection Challenge
+# Shot Attempt Detection Challenge
 
 **Author:** Pedro Andrade Vieira  
-**Date:** _Something_ October 2025  
+**Date:** October 27th 2025  
 **Kinexon Coding Challenge Submission**
 
 ---
 
-## 🧭 Overview
+## Overview
 
 This project implements a **machine learning approach for detecting shot attempts in basketball games** using time-series data of player positions and skeleton keypoints.
 
 The solution includes:
-1. **Feature engineering pipeline** extracting basketball-specific features from skeletal keypoint data
+1. **Feature engineering pipeline** extracting basketball-specific features from player data
 2. **Random Forest classifier** trained on labeled shot events with temporal train/test split
 3. **Comprehensive evaluation framework** with temporal matching and visualization
 4. **Proposed cloud architecture** for scaling shot detection from raw video streams
@@ -20,7 +20,7 @@ The approach demonstrates a **reasonable, explainable, and extensible ML solutio
 
 ---
 
-## 📁 Repository Structure
+## Repository Structure
 
 ```
 .
@@ -38,21 +38,24 @@ The approach demonstrates a **reasonable, explainable, and extensible ML solutio
 │   └── fake_results.py                 # Testing utility for evaluation
 │
 ├── models/
-│   └── shot_detector.pkl        # Trained Random Forest model
+│   └── shot_detector.pkl        # Trained Random Forest model (after train)
 │
 ├── output/
-│   └── predicted_shots.csv      # Detection results
+│   └── predicted_shots.csv      # Detection results (after prediction)
 │
 ├── plots/
-│   └── evaluation_temporal_alignment.png    # Evaluation visualization
+│   ├── [multiple PNG images]                # Data analysis visualization (after eda)
+│   └── evaluation_temporal_alignment.png    # Evaluation visualization (after evaluation)
 │
+├── .gitignore                   # Files/directories ignored by GIT
 ├── pyproject.toml               # Poetry dependencies
+├── poetry.lock                  # Poetry lock file
 └── README.md
 ```
 
 ---
 
-## ⚙️ Setup & Usage
+## Setup & Usage
 
 ### 1. Environment
 ```bash
@@ -102,7 +105,7 @@ poetry run detection info
 
 ---
 
-## 🧩 Approach
+## Approach
 
 ### 1. Data Understanding
 
@@ -114,6 +117,14 @@ The provided data sources:
   - `player_id`: Player who attempted the shot
 
 All data are synchronized on timestamp (ms).
+
+#### Assumptions
+- Shot attempts exhibit characteristic motion patterns detectable from skeletal keypoints
+- Hand elevation, body stability, and temporal dynamics are predictive features
+- Each `player_id` in the data corresponds to a single tracked player throughout the game
+- All timestamps are synchronized across detection and position data sources
+- Ground truth shot events span time ranges (timestamp_s to end_timestamp_s)
+- Shot attempts are relatively rare events (class imbalance addressed via weighting)
 
 ---
 
@@ -202,8 +213,9 @@ The `detect_shots.py` module implements a **Random Forest classifier** for shot 
 **Output format:**
 ```csv
 timestamp_ms,player_id
-152345,23
-187900,5
+1754951121502,3
+1754950807722,0
+1754950868262,4
 ```
 
 ---
@@ -218,7 +230,7 @@ The `evaluate.py` module provides comprehensive evaluation of predictions agains
    - Ground truth shot events span time ranges from `timestamp_s` to `end_timestamp_s`
    - Predictions matched if they fall within the shot event time range: `[start - tolerance, end + tolerance]`
    - Tolerance buffer (default: ±500ms) extends the acceptable range on both sides
-   - Each prediction matched to closest unmatched ground truth event (by midpoint distance)
+   - Each prediction matched to the closest unmatched ground truth event (by midpoint distance)
    - Prevents multiple predictions from matching the same ground truth event
 
 2. **Player ID Matching (Optional):**
@@ -263,14 +275,14 @@ Detailed console output includes:
 
 ---
 
-## ☁️ System Design Proposal
+## System Design Proposal
 
 ### Goal
 Design a **cloud-based architecture** to automatically detect shot attempts from **video streams** at scale.
 
 ---
 
-### 🔧 High-Level Architecture
+### High-Level Architecture
 
 ```
                    ┌────────────────────────┐
@@ -280,7 +292,7 @@ Design a **cloud-based architecture** to automatically detect shot attempts from
        ┌────────────────────────────────────────────┐
        │ Pose Estimation Service (GPU)              │
        │ - Extracts skeleton keypoints from frames  │
-       │ - Outputs detections.csv                   │
+       │ - Outputs detections.csv, positions.csv    │
        └────────────────────────────────────────────┘
                               │
                               ▼
@@ -298,15 +310,15 @@ Design a **cloud-based architecture** to automatically detect shot attempts from
          └──────────────────────────────────────┘
                               │
                               ▼
-          ┌────────────────────────────────┐
-          │ Dashboard / Analytics UI       │
-          │ - View shots overlayed on video│
-          └────────────────────────────────┘
+          ┌─────────────────────────────────┐
+          │ Dashboard / Analytics UI        │
+          │ - View shots overlayed on video │
+          └─────────────────────────────────┘
 ```
 
 ---
 
-### ☁️ Scalability & Deployment
+### Scalability & Deployment
 | Component | Technology | Notes |
 |------------|-------------|-------|
 | **Video storage** | AWS S3 / GCP Cloud Storage | Raw input |
@@ -318,49 +330,51 @@ Design a **cloud-based architecture** to automatically detect shot attempts from
 
 ---
 
-### ⚙️ Future Improvements
-- Upgrade to **deep learning models** (LSTM / Transformer) to capture longer temporal sequences
-- Implement **hyperparameter tuning** (GridSearchCV, Bayesian optimization) for Random Forest
-- Add **feature selection** techniques to identify minimal feature set
-- Use **multi-view camera data** for 3D motion context and occlusion handling
-- Implement **online learning** for model adaptation to different game styles
-- Add **per-shot confidence scores** with uncertainty estimation
-- Enable **real-time streaming inference** for live game analytics
-- Extend to detect **shot types** (3-pointer, layup, free throw) as multi-class problem
+## Future Improvements
+
+### Data Quality & Collection
+- **Expand dataset**: Currently only 2 players have significant shot attempt data
+  - Use data from different games/practices for train and evaluation
+  - Collect data from more players across multiple games for better generalization
+  - Address class imbalance with more diverse shot examples
+  - Include different game scenarios (practice vs. competitive, various venues)
+- **Data cleaning**: Implement outlier detection and noise filtering for skeletal keypoints
+- **Data augmentation**: Apply temporal perturbations and synthetic data generation
+- **Real 3D Data**: Obtain 3D player position in the court coordinate system
+
+### Feature Engineering
+- **Feature selection**: Use techniques like RFECV, mutual information, or SHAP values to identify minimal effective feature set
+- **New features**: Experiment with:
+  - Joint angles and angular velocities (if possible with the current 8-point skeleton)
+  - Ball-hand proximity features
+  - Player-basket orientation and distance
+  - Compare player position with common shot positions (consider player team and court side)
+- **Feature importance analysis**: Per-player feature importance to understand individual playing styles
+
+### Model Training & Architecture
+- **Hyperparameter optimization**: Systematic tuning using GridSearchCV, RandomizedSearchCV, or Bayesian optimization (Optuna)
+- **Alternative models**:
+  - Gradient Boosting (XGBoost, LightGBM, CatBoost)
+  - Deep learning: LSTM, GRU, Temporal Convolutional Networks (TCN), Transformers
+  - Ensemble methods combining multiple model types
+- **Per-player models**: Train specialized models for each player to capture individual shooting patterns
+  - Possibly also use different models for practice and games
+- **Transfer learning**: Pre-train on large dataset, fine-tune on individual players
+
+### Evaluation & Validation
+- **Cross-validation**: Implement time-series cross-validation across multiple games
+- **Per-player evaluation**: Analyze performance separately for each player to identify weaknesses
+- **Stratified splits**: Ensure balanced representation of players in train/test splits
+- **External validation**: Test on completely unseen games and venues
+
+### System Extensions
+- **Multi-view camera integration**: Use 3D pose estimation from multiple camera angles
+- **Real-time inference**: Optimize for low-latency streaming detection
+- **Shot type classification**: Extend to multi-class problem (3-pointer, layup, dunk, free throw)
+- **Confidence scores**: Add calibrated uncertainty estimates for each prediction
+- **Online learning**: Adapt model during games for player-specific patterns and data drift
 
 ---
 
-## 🧠 Assumptions
-- Shot attempts exhibit characteristic motion patterns detectable from skeletal keypoints
-- Hand elevation, body stability, and temporal dynamics are predictive features
-- Each `player_id` in the data corresponds to a single tracked player throughout the game
-- All timestamps are synchronized across detection and position data sources
-- Ground truth shot events span time ranges (timestamp_s to end_timestamp_s)
-- Shot attempts are relatively rare events (class imbalance addressed via weighting)
-
----
-
-## 🧾 Example Output (predicted_shots.csv)
-```
-timestamp_ms,player_id
-152345,23
-187900,5
-289532,23
-...
-```
-
----
-
-## 📈 Next Steps
-1. Collect more training data from additional games to improve generalization
-2. Experiment with deep learning architectures (LSTM, TCN, Transformers) for temporal modeling
-3. Implement cross-validation and hyperparameter tuning for optimal performance
-4. Extend architecture for multi-camera input and 3D pose estimation
-5. Evaluate robustness on unseen games, different venues, and partial occlusions
-6. Add shot type classification (3-pointer, layup, dunk, free throw)
-7. Deploy model in cloud environment for scalable inference
-
----
-
-## 💬 Contact
+## Contact
 If you have any questions or would like to discuss the approach, feel free to reach out during the interview.
