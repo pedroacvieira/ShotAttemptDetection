@@ -25,13 +25,20 @@ def load_ground_truth(file_path: Path) -> pd.DataFrame:
         file_path: Path to the JSON file containing ground truth shot events
 
     Returns:
-        DataFrame with shot events including timestamp_ms column
+        DataFrame with shot events including timestamp_ms and end_timestamp_ms columns
     """
     with open(file_path, "r") as f:
         data = json.load(f)
 
     df = pd.DataFrame(data)
     df["timestamp_ms"] = (df["timestamp_s"] * 1000).astype(int)
+
+    # Load end timestamp if available, otherwise use start timestamp
+    if "end_timestamp_s" in df.columns:
+        df["end_timestamp_ms"] = (df["end_timestamp_s"] * 1000).astype(int)
+    else:
+        df["end_timestamp_ms"] = df["timestamp_ms"]
+
     return df
 
 
@@ -49,22 +56,27 @@ def load_predictions(file_path: Path) -> pd.DataFrame:
 
 
 def evaluate_temporal_matching(
-    predictions: pd.DataFrame, ground_truth: pd.DataFrame, tolerance_ms: int = 500, match_player_id: bool = True
+    predictions: pd.DataFrame, ground_truth: pd.DataFrame, tolerance_ms: int = 300, match_player_id: bool = True
 ) -> Tuple[npt.NDArray[np.bool_], npt.NDArray[np.bool_], int, int]:
-    """
-    Evaluate predictions against ground truth with temporal tolerance.
+    """Evaluate predictions against ground truth with temporal tolerance.
+
+    Predictions are matched to ground truth shot events considering the full
+    time range of each shot (from timestamp_ms to end_timestamp_ms). A prediction
+    is considered a match if it falls within the shot event time range, with an
+    optional tolerance buffer applied before the start and after the end.
 
     Args:
         predictions: DataFrame with timestamp_ms and player_id columns
-        ground_truth: DataFrame with timestamp_ms and player_id columns
-        tolerance_ms: Temporal tolerance in milliseconds (�tolerance_ms)
+        ground_truth: DataFrame with timestamp_ms, end_timestamp_ms, and player_id columns
+        tolerance_ms: Temporal tolerance buffer in milliseconds (extends range on both sides)
         match_player_id: Whether to match player IDs in addition to timestamps
 
     Returns:
         Tuple of (true_positives_mask, matched_gt_mask, num_predictions, num_ground_truth)
     """
     pred_times = predictions["timestamp_ms"].values
-    gt_times = ground_truth["timestamp_ms"].values
+    gt_start_times = ground_truth["timestamp_ms"].values
+    gt_end_times = ground_truth["end_timestamp_ms"].values
 
     if match_player_id and "player_id" in predictions.columns and "player_id" in ground_truth.columns:
         pred_players = predictions["player_id"].astype(str).values
@@ -78,29 +90,29 @@ def evaluate_temporal_matching(
     # Track which ground truth events have been matched
     matched_gt_mask = np.zeros(len(ground_truth), dtype=bool)
 
-    # For each prediction, find the closest ground truth event within tolerance
+    # For each prediction, check if it falls within any shot event time range
     for i, pred_time in enumerate(pred_times):
-        # Calculate time differences
-        time_diffs = np.abs(gt_times - pred_time)
+        # Check if prediction falls within shot event time range (with tolerance buffer)
+        # Prediction matches if: (gt_start - tolerance) <= pred_time <= (gt_end + tolerance)
+        within_range = (pred_time >= gt_start_times - tolerance_ms) & (pred_time <= gt_end_times + tolerance_ms)
 
-        # Find events within tolerance
-        within_tolerance = time_diffs <= tolerance_ms
-
-        if not np.any(within_tolerance):
+        if not np.any(within_range):
             continue
 
         # If player matching is enabled, also check player IDs
         if pred_players is not None and gt_players is not None:
             pred_player = pred_players[i]
             player_matches = (gt_players == pred_player) | (pred_player == "Undefined") | (gt_players == "Undefined")
-            valid_matches = within_tolerance & player_matches & (~matched_gt_mask)
+            valid_matches = within_range & player_matches & (~matched_gt_mask)
         else:
-            valid_matches = within_tolerance & (~matched_gt_mask)
+            valid_matches = within_range & (~matched_gt_mask)
 
         if np.any(valid_matches):
-            # Find the closest valid match
+            # Find the closest valid match (closest to midpoint of shot event)
             valid_indices = np.where(valid_matches)[0]
-            closest_idx = valid_indices[np.argmin(time_diffs[valid_indices])]
+            gt_midpoints = (gt_start_times[valid_indices] + gt_end_times[valid_indices]) / 2
+            time_diffs = np.abs(gt_midpoints - pred_time)
+            closest_idx = valid_indices[np.argmin(time_diffs)]
 
             tp_mask[i] = True
             matched_gt_mask[closest_idx] = True
@@ -150,9 +162,13 @@ def plot_temporal_alignment(
 ) -> None:
     """Plot temporal alignment between predictions and ground truth.
 
+    Creates two subplots:
+    1. Timeline showing shot event ranges (horizontal bars) and prediction points
+    2. Histogram of time differences relative to shot event midpoints
+
     Args:
-        predictions: DataFrame with predicted shot events
-        ground_truth: DataFrame with ground truth shot events
+        predictions: DataFrame with predicted shot events (timestamp_ms)
+        ground_truth: DataFrame with ground truth shot events (timestamp_ms, end_timestamp_ms)
         tp_mask: Boolean mask indicating true positive predictions
         matched_gt_mask: Boolean mask indicating matched ground truth events
     """
@@ -161,28 +177,20 @@ def plot_temporal_alignment(
     # Convert to relative timestamps (minutes)
     min_time = min(predictions["timestamp_ms"].min(), ground_truth["timestamp_ms"].min())
     pred_times_rel = (predictions["timestamp_ms"] - min_time) / 60000  # minutes
-    gt_times_rel = (ground_truth["timestamp_ms"] - min_time) / 60000  # minutes
+    gt_start_times_rel = (ground_truth["timestamp_ms"] - min_time) / 60000  # minutes
+    gt_end_times_rel = (ground_truth["end_timestamp_ms"] - min_time) / 60000  # minutes
 
-    # Plot 1: Timeline view
-    # Ground truth events
-    axes[0].scatter(
-        gt_times_rel[matched_gt_mask],
-        [1] * np.sum(matched_gt_mask),
-        c="green",
-        s=100,
-        alpha=0.7,
-        label=f"Matched GT ({np.sum(matched_gt_mask)})",
-        marker="s",
-    )
-    axes[0].scatter(
-        gt_times_rel[~matched_gt_mask],
-        [1] * np.sum(~matched_gt_mask),
-        c="red",
-        s=100,
-        alpha=0.7,
-        label=f"Missed GT ({np.sum(~matched_gt_mask)})",
-        marker="s",
-    )
+    # Plot 1: Timeline view with shot event ranges
+    # Ground truth events as horizontal bars showing duration
+    for i in range(len(ground_truth)):
+        start = gt_start_times_rel.iloc[i]
+        end = gt_end_times_rel.iloc[i]
+        color = "green" if matched_gt_mask[i] else "red"
+        axes[0].plot([start, end], [1, 1], color=color, linewidth=4, alpha=0.6, solid_capstyle="round")
+
+    # Add legend markers for ground truth
+    axes[0].plot([], [], color="green", linewidth=4, alpha=0.6, label=f"Matched GT ({np.sum(matched_gt_mask)})")
+    axes[0].plot([], [], color="red", linewidth=4, alpha=0.6, label=f"Missed GT ({np.sum(~matched_gt_mask)})")
 
     # Predictions
     axes[0].scatter(
@@ -216,19 +224,37 @@ def plot_temporal_alignment(
     if np.sum(tp_mask) > 0:
         matched_pred_times = predictions.loc[tp_mask, "timestamp_ms"].values
 
-        # Calculate time differences for matched pairs
+        # Calculate time differences relative to shot event midpoint
         time_diffs = []
+        gt_start_times = ground_truth["timestamp_ms"].values
+        gt_end_times = ground_truth["end_timestamp_ms"].values
+
         for pred_time in matched_pred_times:
-            gt_times = ground_truth["timestamp_ms"].values
-            closest_gt_idx = np.argmin(np.abs(gt_times - pred_time))
-            time_diff = pred_time - gt_times[closest_gt_idx]
+            # Find the matched ground truth event
+            gt_midpoints = (gt_start_times + gt_end_times) / 2
+            closest_gt_idx = np.argmin(np.abs(gt_midpoints - pred_time))
+
+            # Calculate difference from midpoint of shot event
+            time_diff = pred_time - gt_midpoints[closest_gt_idx]
             time_diffs.append(time_diff)
 
-        axes[1].hist(time_diffs, bins=20, alpha=0.7, edgecolor="black")
-        axes[1].set_xlabel("Time Difference (ms): Prediction - Ground Truth")
+        axes[1].hist(time_diffs, bins=20, alpha=0.7, edgecolor="black", color="steelblue")
+        axes[1].set_xlabel("Time Difference (ms): Prediction - Shot Event Midpoint")
         axes[1].set_ylabel("Count")
         axes[1].set_title("Distribution of Time Differences for Matched Events")
-        axes[1].axvline(x=0, color="red", linestyle="--", alpha=0.7, label="Perfect Match")
+        axes[1].axvline(x=0, color="red", linestyle="--", alpha=0.7, linewidth=2, label="Shot Event Midpoint")
+
+        # Add shaded region showing typical shot event duration
+        if len(gt_start_times) > 0:
+            avg_duration = np.mean(gt_end_times - gt_start_times)
+            axes[1].axvspan(
+                -avg_duration / 2,
+                avg_duration / 2,
+                alpha=0.2,
+                color="green",
+                label=f"Avg Shot Duration: {avg_duration:.0f}ms",
+            )
+
         axes[1].legend()
         axes[1].grid(True, alpha=0.3)
     else:
@@ -274,7 +300,7 @@ def print_detailed_results(metrics: Dict[str, float], tolerance_ms: int) -> None
 def evaluate(
     predictions: Path = typer.Option("output/predicted_shots.csv", help="Path to predicted shots CSV"),
     ground_truth: Path = typer.Option("data/shot_events.json", help="Path to ground truth JSON"),
-    tolerance_ms: int = typer.Option(500, help="Temporal tolerance in milliseconds"),
+    tolerance_ms: int = typer.Option(300, help="Temporal tolerance in milliseconds"),
     match_player_id: bool = typer.Option(True, help="Whether to match player IDs"),
     verbose: bool = typer.Option(False, help="Show detailed per-event analysis"),
 ) -> None:

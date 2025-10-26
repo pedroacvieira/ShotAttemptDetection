@@ -21,18 +21,16 @@ from src.features import extract_all_features
 
 
 def create_shot_labels(
-    features_df: pd.DataFrame, shot_events_df: pd.DataFrame, rolling_window_ms: float, offset_ms: int = 0
+    features_df: pd.DataFrame, shot_events_df: pd.DataFrame, offset_ms: int = 0
 ) -> pd.DataFrame:
     """Create binary labels for shot attempts.
 
     A frame is labeled as a shot (1) if it falls within the shot event time range
-    (between timestamp_s and end_timestamp_s) for that player. The labels are aligned
-    with the center of the feature window to ensure temporal consistency.
+    (between timestamp_s and end_timestamp_s) for that player.
 
     Args:
         features_df: DataFrame with extracted features and timestamps
         shot_events_df: DataFrame with ground truth shot events (must have timestamp_s and end_timestamp_s)
-        rolling_window_ms: Rolling window size in milliseconds used for feature extraction
         offset_ms: Additional time offset in milliseconds to adjust label alignment (default: 0)
 
     Returns:
@@ -40,9 +38,6 @@ def create_shot_labels(
     """
     # To align labels with the center of the feature window, subtract half of it
     offset_s = offset_ms / 1000.0
-    rolling_window_s = rolling_window_ms / 1000.0
-    total_offset_s = offset_s - (rolling_window_s / 2)
-
     labeled_df = features_df.copy()
     labeled_df["is_shot"] = 0
 
@@ -54,8 +49,8 @@ def create_shot_labels(
 
         # Find frames within shot event time range for this player
         player_mask = labeled_df["player_id"] == player_id
-        time_mask = (labeled_df["timestamp_s"] >= shot_start + total_offset_s) & (
-            labeled_df["timestamp_s"] <= shot_end + total_offset_s
+        time_mask = (labeled_df["timestamp_s"] >= shot_start + offset_s) & (
+            labeled_df["timestamp_s"] <= shot_end + offset_s
         )
 
         labeled_df.loc[player_mask & time_mask, "is_shot"] = 1
@@ -179,7 +174,7 @@ def train(
 
     # Create labels
     print(f"\n[3/7] Creating labels...")
-    labeled_df = create_shot_labels(features_df, shot_events_df, rolling_window_ms, label_offset_ms)
+    labeled_df = create_shot_labels(features_df, shot_events_df, label_offset_ms)
 
     n_shots = labeled_df["is_shot"].sum()
     n_total = len(labeled_df)
