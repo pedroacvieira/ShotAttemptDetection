@@ -16,17 +16,22 @@ from scipy.signal import savgol_filter
 from src.preprocess import load_data
 
 
-def apply_savgol_smoothing(df: pd.DataFrame, columns: list, window_length: int = 10, polyorder: int = 2) -> pd.DataFrame:
+def apply_savgol_smoothing(
+    df: pd.DataFrame, columns: list[str], window_length: int = 9, polyorder: int = 2
+) -> pd.DataFrame:
     """Apply Savitzky-Golay filter to smooth data per player.
+
+    The filter is applied independently to each player to avoid cross-player
+    contamination in the time-series data.
 
     Args:
         df: DataFrame with player_id and columns to smooth
         columns: List of column names to apply smoothing to
-        window_length: Length of filter window (must be odd, default: 10)
+        window_length: Length of filter window (must be odd, default: 9)
         polyorder: Order of polynomial (default: 2)
 
     Returns:
-        DataFrame with smoothed columns
+        DataFrame with smoothed columns (same structure as input)
     """
     result_df = df.copy()
 
@@ -46,7 +51,17 @@ def apply_savgol_smoothing(df: pd.DataFrame, columns: list, window_length: int =
 
 
 def extract_hand_y_rel_head(detections_df: pd.DataFrame) -> pd.DataFrame:
-    """Extract hand Y position relative to head."""
+    """Extract hand Y position relative to head.
+
+    Measures the vertical distance of each hand from the face position.
+    Higher values indicate hands raised above head level.
+
+    Args:
+        detections_df: DataFrame with skeletal keypoint detections
+
+    Returns:
+        DataFrame with left_hand_y_rel_head and right_hand_y_rel_head columns
+    """
     features_df = detections_df.copy()
     features_df["left_hand_y_rel_head"] = detections_df["left-hand-y"] - detections_df["face-y"]
     features_df["right_hand_y_rel_head"] = detections_df["right-hand-y"] - detections_df["face-y"]
@@ -58,7 +73,17 @@ def extract_hand_y_rel_head(detections_df: pd.DataFrame) -> pd.DataFrame:
 
 
 def extract_hand_y_velocity_rel_head(detections_df: pd.DataFrame) -> pd.DataFrame:
-    """Extract hand Y velocity relative to head."""
+    """Extract hand Y velocity relative to head.
+
+    Measures the rate of change in vertical hand position relative to the head.
+    Higher values indicate rapid hand movement upward or downward from face level.
+
+    Args:
+        detections_df: DataFrame with skeletal keypoint detections
+
+    Returns:
+        DataFrame with left_hand_y_velocity_rel_head and right_hand_y_velocity_rel_head columns
+    """
     # First get hand positions relative to head using existing function
     hand_rel_head_df = extract_hand_y_rel_head(detections_df)
 
@@ -73,19 +98,33 @@ def extract_hand_y_velocity_rel_head(detections_df: pd.DataFrame) -> pd.DataFram
     features_df["right_hand_rel_head_diff"] = features_df.groupby("player_id")["right_hand_y_rel_head"].diff()
 
     # Calculate velocities
-    features_df["left_hand_y_velocity_rel_head"] = np.abs(features_df["left_hand_rel_head_diff"]) / features_df["time_diff"]
-    features_df["right_hand_y_velocity_rel_head"] = np.abs(features_df["right_hand_rel_head_diff"]) / features_df["time_diff"]
+    features_df["left_hand_y_velocity_rel_head"] = (
+        np.abs(features_df["left_hand_rel_head_diff"]) / features_df["time_diff"]
+    )
+    features_df["right_hand_y_velocity_rel_head"] = (
+        np.abs(features_df["right_hand_rel_head_diff"]) / features_df["time_diff"]
+    )
 
     return features_df[["player_id", "timestamp_s", "left_hand_y_velocity_rel_head", "right_hand_y_velocity_rel_head"]]
 
 
 def extract_hand_distance(detections_df: pd.DataFrame) -> pd.DataFrame:
-    """Extract distance between hands (hand separation)."""
+    """Extract distance between hands (hand separation).
+
+    Measures the Euclidean distance between left and right hand positions.
+    Larger values indicate wider hand separation, common in shooting motions.
+
+    Args:
+        detections_df: DataFrame with skeletal keypoint detections
+
+    Returns:
+        DataFrame with hand_distance column
+    """
     features_df = detections_df.copy()
 
     features_df["hand_distance"] = np.sqrt(
-        (detections_df["left-hand-x"] - detections_df["right-hand-x"]) ** 2 +
-        (detections_df["left-hand-y"] - detections_df["right-hand-y"]) ** 2
+        (detections_df["left-hand-x"] - detections_df["right-hand-x"]) ** 2
+        + (detections_df["left-hand-y"] - detections_df["right-hand-y"]) ** 2
     )
 
     # Apply smoothing to positional feature
@@ -95,13 +134,24 @@ def extract_hand_distance(detections_df: pd.DataFrame) -> pd.DataFrame:
 
 
 def extract_heel_distance(detections_df: pd.DataFrame) -> pd.DataFrame:
-    """Extract distance between heels (normalized by bounding box height)."""
+    """Extract distance between heels (normalized by bounding box height).
+
+    Measures the Euclidean distance between left and right heel positions,
+    normalized by the player's bounding box height to account for player size.
+    Wider stance may correlate with shooting preparation.
+
+    Args:
+        detections_df: DataFrame with skeletal keypoint detections
+
+    Returns:
+        DataFrame with heel_distance column (normalized)
+    """
     features_df = detections_df.copy()
 
     # Calculate raw heel distance
     raw_heel_distance = np.sqrt(
-        (detections_df["left-heel-x"] - detections_df["right-heel-x"]) ** 2 +
-        (detections_df["left-heel-y"] - detections_df["right-heel-y"]) ** 2
+        (detections_df["left-heel-x"] - detections_df["right-heel-x"]) ** 2
+        + (detections_df["left-heel-y"] - detections_df["right-heel-y"]) ** 2
     )
 
     # Normalize by bounding box height
@@ -115,7 +165,18 @@ def extract_heel_distance(detections_df: pd.DataFrame) -> pd.DataFrame:
 
 
 def extract_hand_y_to_bbox(detections_df: pd.DataFrame) -> pd.DataFrame:
-    """Extract hand Y position relative to bounding box."""
+    """Extract hand Y position relative to bounding box.
+
+    Measures the vertical position of each hand relative to the player's
+    bounding box, normalized by box height. Values closer to 0 indicate
+    hands near the top of the bounding box, higher above the player's body.
+
+    Args:
+        detections_df: DataFrame with skeletal keypoint detections
+
+    Returns:
+        DataFrame with left_hand_y_to_bbox and right_hand_y_to_bbox columns
+    """
     features_df = detections_df.copy()
 
     bbox_height = detections_df["bbox-ul-y"] - detections_df["bbox-lr-y"]
@@ -132,7 +193,17 @@ def extract_hand_y_to_bbox(detections_df: pd.DataFrame) -> pd.DataFrame:
 
 
 def extract_hip_y_to_bbox(detections_df: pd.DataFrame) -> pd.DataFrame:
-    """Extract hip Y position relative to bounding box."""
+    """Extract hip Y position relative to bounding box.
+
+    Measures the vertical position of the hip center relative to the player's
+    bounding box, normalized by box height. Tracks body center-of-mass position.
+
+    Args:
+        detections_df: DataFrame with skeletal keypoint detections
+
+    Returns:
+        DataFrame with hip_y_to_bbox column
+    """
     features_df = detections_df.copy()
 
     bbox_height = detections_df["bbox-ul-y"] - detections_df["bbox-lr-y"]
@@ -148,7 +219,17 @@ def extract_hip_y_to_bbox(detections_df: pd.DataFrame) -> pd.DataFrame:
 
 
 def extract_hip_speed_to_bbox(detections_df: pd.DataFrame) -> pd.DataFrame:
-    """Extract hip speed normalized by bounding box height."""
+    """Extract hip speed normalized by bounding box height.
+
+    Measures the rate of vertical hip movement, normalized by bounding box height
+    to account for player size. Captures body motion dynamics during shooting.
+
+    Args:
+        detections_df: DataFrame with skeletal keypoint detections
+
+    Returns:
+        DataFrame with hip_speed_to_bbox column
+    """
     features_df = detections_df.copy()
 
     # Sort by player and timestamp
@@ -168,7 +249,17 @@ def extract_hip_speed_to_bbox(detections_df: pd.DataFrame) -> pd.DataFrame:
 
 
 def extract_hand_hip_ratio(detections_df: pd.DataFrame) -> pd.DataFrame:
-    """Extract ratio between hand positions and hip position."""
+    """Extract ratio between hand positions and hip position.
+
+    Measures the relative position of each hand compared to hip center position.
+    Values > 1 indicate hands above hips, common in shooting motions.
+
+    Args:
+        detections_df: DataFrame with skeletal keypoint detections
+
+    Returns:
+        DataFrame with left_hand_hip_ratio and right_hand_hip_ratio columns
+    """
     features_df = detections_df.copy()
 
     # Calculate ratios (with small epsilon to avoid division by zero)
@@ -213,21 +304,21 @@ def extract_player_abs_speed(detections_df: pd.DataFrame, positions_df: pd.DataF
     positions_features["y_diff"] = positions_features.groupby("player_id")["y in m"].diff()
 
     # Calculate absolute speed (Euclidean distance / time)
-    positions_features["player_abs_speed"] = np.sqrt(
-        positions_features["x_diff"]**2 + positions_features["y_diff"]**2
-    ) / positions_features["time_diff"]
+    positions_features["player_abs_speed"] = (
+        np.sqrt(positions_features["x_diff"] ** 2 + positions_features["y_diff"] ** 2) / positions_features["time_diff"]
+    )
 
     # Merge with detections data to align timestamps
     result_df = detections_df[["player_id", "timestamp_s"]].merge(
         positions_features[["player_id", "timestamp_s", "player_abs_speed"]],
         on=["player_id", "timestamp_s"],
-        how="left"
+        how="left",
     )
 
     return result_df[["player_id", "timestamp_s", "player_abs_speed"]]
 
 
-def apply_rolling_max(features_df: pd.DataFrame, feature_columns: list, window_ms: float = 500.0) -> pd.DataFrame:
+def apply_rolling_max(features_df: pd.DataFrame, feature_columns: list[str], window_ms: float = 500.0) -> pd.DataFrame:
     """Apply rolling maximum over specified time window for temporal dynamics.
 
     Args:
@@ -262,7 +353,9 @@ def apply_rolling_max(features_df: pd.DataFrame, feature_columns: list, window_m
     return result_df
 
 
-def extract_all_features(detections_df: pd.DataFrame, positions_df: pd.DataFrame = None, rolling_window_ms: float = 500.0) -> pd.DataFrame:
+def extract_all_features(
+    detections_df: pd.DataFrame, positions_df: Optional[pd.DataFrame] = None, rolling_window_ms: float = 500.0
+) -> pd.DataFrame:
     """Extract all basketball shot detection features.
 
     Args:
@@ -271,10 +364,10 @@ def extract_all_features(detections_df: pd.DataFrame, positions_df: pd.DataFrame
         rolling_window_ms: Time window for rolling maximum features (default: 500ms)
 
     Returns:
-        DataFrame with all extracted features
+        DataFrame with all extracted features including timestamp_ms
     """
-    # Start with base data
-    result_df = detections_df[["player_id", "timestamp_s"]].copy()
+    # Start with base data including original timestamp_ms
+    result_df = detections_df[["player_id", "timestamp_s", "timestamp_ms"]].copy()
 
     # Extract individual feature sets
     hand_y_rel_head = extract_hand_y_rel_head(detections_df)
@@ -289,22 +382,30 @@ def extract_all_features(detections_df: pd.DataFrame, positions_df: pd.DataFrame
 
     # Merge all features
     feature_dfs = [
-        hand_y_rel_head, hand_y_velocity, hand_distance, hip_speed,
-        heel_distance, hand_y_bbox, hip_y_bbox, hand_hip_ratio, player_speed
+        hand_y_rel_head,
+        hand_y_velocity,
+        hand_distance,
+        hip_speed,
+        heel_distance,
+        hand_y_bbox,
+        hip_y_bbox,
+        hand_hip_ratio,
+        player_speed,
     ]
 
     for feature_df in feature_dfs:
-        result_df = result_df.merge(
-            feature_df,
-            on=["player_id", "timestamp_s"],
-            how="left"
-        )
+        result_df = result_df.merge(feature_df, on=["player_id", "timestamp_s"], how="left")
 
     # Apply rolling maximum to key features
     key_features = [
-        "left_hand_y_rel_head", "right_hand_y_rel_head",
-        "left_hand_y_velocity_rel_head", "right_hand_y_velocity_rel_head",
-        "hand_distance", "hip_speed_to_bbox", "heel_distance", "player_abs_speed"
+        "left_hand_y_rel_head",
+        "right_hand_y_rel_head",
+        "left_hand_y_velocity_rel_head",
+        "right_hand_y_velocity_rel_head",
+        "hand_distance",
+        "hip_speed_to_bbox",
+        "heel_distance",
+        "player_abs_speed",
     ]
 
     result_df = apply_rolling_max(result_df, key_features, rolling_window_ms)
@@ -315,8 +416,12 @@ def extract_all_features(detections_df: pd.DataFrame, positions_df: pd.DataFrame
     return result_df
 
 
-def extract_features_for_player(detections_df: pd.DataFrame, player_id: str,
-                              positions_df: pd.DataFrame = None, rolling_window_ms: float = 500.0) -> pd.DataFrame:
+def extract_features_for_player(
+    detections_df: pd.DataFrame,
+    player_id: str,
+    positions_df: Optional[pd.DataFrame] = None,
+    rolling_window_ms: float = 500.0,
+) -> pd.DataFrame:
     """Extract features for a specific player.
 
     Args:
@@ -419,7 +524,9 @@ def info(
         print(f"\nDETECTIONS DATA:")
         print(f"  - Shape: {detections_df.shape}")
         print(f"  - Players: {sorted(detections_df['player_id'].unique())}")
-        print(f"  - Available keypoints: {[col for col in detections_df.columns if '-' in col and col != 'timestamp_s']}")
+        print(
+            f"  - Available keypoints: {[col for col in detections_df.columns if '-' in col and col != 'timestamp_s']}"
+        )
         print(f"  - Time range: {detections_df['timestamp_s'].min():.2f} - {detections_df['timestamp_s'].max():.2f} s")
     else:
         print("\nNo detection data found!")
@@ -435,7 +542,7 @@ def info(
         "hip_speed_to_bbox": "Hip speed normalized by bounding box height",
         "hand_hip_ratio": "Ratio between hand and hip Y positions",
         "player_abs_speed": "Player absolute speed from X and Y positions",
-        "rolling_max_*": "Rolling maximum values over time window"
+        "rolling_max_*": "Rolling maximum values over time window",
     }
 
     for feature, description in feature_info.items():

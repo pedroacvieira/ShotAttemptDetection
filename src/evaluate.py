@@ -12,15 +12,21 @@ import numpy as np
 import numpy.typing as npt
 import typer
 from pathlib import Path
-from typing import Any
+from typing import Tuple, Dict
 import matplotlib.pyplot as plt
-from numpy import ndarray, dtype
 
 app = typer.Typer(help="Evaluate shot detection predictions against ground truth")
 
 
 def load_ground_truth(file_path: Path) -> pd.DataFrame:
-    """Load ground truth shot events from JSON file."""
+    """Load ground truth shot events from JSON file.
+
+    Args:
+        file_path: Path to the JSON file containing ground truth shot events
+
+    Returns:
+        DataFrame with shot events including timestamp_ms column
+    """
     with open(file_path, "r") as f:
         data = json.load(f)
 
@@ -30,14 +36,21 @@ def load_ground_truth(file_path: Path) -> pd.DataFrame:
 
 
 def load_predictions(file_path: Path) -> pd.DataFrame:
-    """Load predicted shots from CSV file."""
+    """Load predicted shots from CSV file.
+
+    Args:
+        file_path: Path to the CSV file containing predictions
+
+    Returns:
+        DataFrame with predicted shot events
+    """
     df = pd.read_csv(file_path)
     return df
 
 
 def evaluate_temporal_matching(
     predictions: pd.DataFrame, ground_truth: pd.DataFrame, tolerance_ms: int = 500, match_player_id: bool = True
-) -> tuple[ndarray[tuple[int], dtype[Any]], ndarray[tuple[int], dtype[Any]], int, int]:
+) -> Tuple[npt.NDArray[np.bool_], npt.NDArray[np.bool_], int, int]:
     """
     Evaluate predictions against ground truth with temporal tolerance.
 
@@ -96,9 +109,19 @@ def evaluate_temporal_matching(
 
 
 def calculate_metrics(
-    tp_mask: npt.NDArray, matched_gt_mask: npt.NDArray, num_predictions: int, num_ground_truth: int
-) -> dict:
-    """Calculate precision, recall, and F1-score."""
+    tp_mask: npt.NDArray[np.bool_], matched_gt_mask: npt.NDArray[np.bool_], num_predictions: int, num_ground_truth: int
+) -> Dict[str, float]:
+    """Calculate precision, recall, and F1-score.
+
+    Args:
+        tp_mask: Boolean mask indicating true positive predictions
+        matched_gt_mask: Boolean mask indicating matched ground truth events
+        num_predictions: Total number of predictions
+        num_ground_truth: Total number of ground truth events
+
+    Returns:
+        Dictionary containing evaluation metrics
+    """
     true_positives = np.sum(tp_mask)
     false_positives = num_predictions - true_positives
     false_negatives = num_ground_truth - np.sum(matched_gt_mask)
@@ -122,11 +145,17 @@ def calculate_metrics(
 def plot_temporal_alignment(
     predictions: pd.DataFrame,
     ground_truth: pd.DataFrame,
-    tp_mask: npt.NDArray,
-    matched_gt_mask: npt.NDArray,
-    save_plots: bool = True,
-):
-    """Plot temporal alignment between predictions and ground truth."""
+    tp_mask: npt.NDArray[np.bool_],
+    matched_gt_mask: npt.NDArray[np.bool_],
+) -> None:
+    """Plot temporal alignment between predictions and ground truth.
+
+    Args:
+        predictions: DataFrame with predicted shot events
+        ground_truth: DataFrame with ground truth shot events
+        tp_mask: Boolean mask indicating true positive predictions
+        matched_gt_mask: Boolean mask indicating matched ground truth events
+    """
     fig, axes = plt.subplots(2, 1, figsize=(15, 10))
 
     # Convert to relative timestamps (minutes)
@@ -209,14 +238,16 @@ def plot_temporal_alignment(
         axes[1].set_title("Distribution of Time Differences for Matched Events")
 
     plt.tight_layout()
-    if save_plots:
-        plt.savefig("plots/evaluation_temporal_alignment.png", dpi=150, bbox_inches="tight")
-    else:
-        plt.show()
+    plt.savefig("plots/evaluation_temporal_alignment.png", dpi=150, bbox_inches="tight")
 
 
-def print_detailed_results(metrics: dict, tolerance_ms: int):
-    """Print detailed evaluation results."""
+def print_detailed_results(metrics: Dict[str, float], tolerance_ms: int) -> None:
+    """Print detailed evaluation results to console.
+
+    Args:
+        metrics: Dictionary containing evaluation metrics
+        tolerance_ms: Temporal tolerance used for matching (in milliseconds)
+    """
     print("=" * 70)
     print("SHOT DETECTION EVALUATION RESULTS")
     print("=" * 70)
@@ -224,7 +255,7 @@ def print_detailed_results(metrics: dict, tolerance_ms: int):
     print(f"\nDATASET SUMMARY:")
     print(f"  - Ground Truth Events: {metrics['num_ground_truth']}")
     print(f"  - Predicted Events: {metrics['num_predictions']}")
-    print(f"  - Temporal Tolerance: �{tolerance_ms}ms")
+    print(f"  - Temporal Tolerance: {tolerance_ms}ms")
 
     print(f"\nMATCHING RESULTS:")
     print(f"  - True Positives:  {metrics['true_positives']:3d}")
@@ -236,16 +267,6 @@ def print_detailed_results(metrics: dict, tolerance_ms: int):
     print(f"  - Recall:    {metrics['recall']:.3f} ({metrics['recall']*100:.1f}%)")
     print(f"  - F1-Score:  {metrics['f1_score']:.3f} ({metrics['f1_score']*100:.1f}%)")
 
-    # Performance interpretation
-    print(f"\nINTERPRETATION:")
-    if metrics["f1_score"] >= 0.8:
-        print("  Excellent performance!")
-    elif metrics["f1_score"] >= 0.6:
-        print("  Good performance with room for improvement")
-    elif metrics["f1_score"] >= 0.4:
-        print("  Moderate performance - consider algorithm improvements")
-    else:
-        print("  Poor performance - significant improvements needed")
     print("=" * 70)
 
 
@@ -255,14 +276,19 @@ def evaluate(
     ground_truth: Path = typer.Option("data/shot_events.json", help="Path to ground truth JSON"),
     tolerance_ms: int = typer.Option(500, help="Temporal tolerance in milliseconds"),
     match_player_id: bool = typer.Option(True, help="Whether to match player IDs"),
-    save_plots: bool = typer.Option(True, help="Save evaluation plots"),
     verbose: bool = typer.Option(False, help="Show detailed per-event analysis"),
-):
-    """
-    Evaluate shot detection predictions against ground truth.
+) -> None:
+    """Evaluate shot detection predictions against ground truth.
 
     This command loads both prediction and ground truth files, performs temporal
     matching within the specified tolerance, and calculates standard classification metrics.
+
+    Args:
+        predictions: Path to predicted shots CSV file
+        ground_truth: Path to ground truth JSON file
+        tolerance_ms: Temporal tolerance for matching in milliseconds
+        match_player_id: Whether to require player ID matching
+        verbose: Whether to show detailed per-event analysis
     """
     print("Loading evaluation data...")
 
@@ -285,11 +311,9 @@ def evaluate(
         print_detailed_results(metrics, tolerance_ms)
 
         # Generate plots
-        if save_plots or not save_plots:  # Always generate for now
-            print("\nGenerating evaluation plots...")
-            plot_temporal_alignment(pred_df, gt_df, tp_mask, matched_gt_mask, save_plots)
-            if save_plots:
-                print("Plots saved to plots/evaluation_temporal_alignment.png")
+        print("\nGenerating evaluation plots...")
+        plot_temporal_alignment(pred_df, gt_df, tp_mask, matched_gt_mask)
+        print("Plots saved to plots/evaluation_temporal_alignment.png")
 
         # Verbose analysis
         if verbose:
@@ -307,9 +331,9 @@ def evaluate(
             print(missed_events.to_string(index=False))
 
     except FileNotFoundError as e:
-        print(f"L Error: Could not find file - {e}")
+        print(f"ERROR: Could not find file - {e}")
     except Exception as e:
-        print(f"L Error during evaluation: {e}")
+        print(f"ERROR: Evaluation failed - {e}")
         raise
 
 
