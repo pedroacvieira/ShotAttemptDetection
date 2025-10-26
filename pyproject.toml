@@ -24,7 +24,7 @@ black = "^25.9.0"
 eda = "src.exploratory_data_analysis:app"
 fake-results = "src.fake_results:app"
 features = "src.features:app"
-detect-shots = "src.detect_shots:app"
+detection = "src.detect_shots:app"
 evaluate = "src.evaluate:app"
 
 [build-system]
