@@ -284,36 +284,29 @@ Design a **cloud-based architecture** to automatically detect shot attempts from
 
 ### High-Level Architecture
 
-```
-                   ┌────────────────────────┐
-                   │  Video Upload / Stream │
-                   └──────────┬─────────────┘
-                              ▼
-       ┌────────────────────────────────────────────┐
-       │ Pose Estimation Service (GPU)              │
-       │ - Extracts skeleton keypoints from frames  │
-       │ - Outputs detections.csv, positions.csv    │
-       └────────────────────────────────────────────┘
-                              │
-                              ▼
-        ┌────────────────────────────────────────┐
-        │ Shot Detection Service (CPU)           │
-        │ - Runs heuristic / ML model            │
-        │ - Produces shot events (timestamp, id) │
-        └────────────────────────────────────────┘
-                              │
-                              ▼
-         ┌──────────────────────────────────────┐
-         │ Event Storage & API                  │
-         │ - Stores metadata in Postgres        │
-         │ - Exposes REST/GraphQL endpoints     │
-         └──────────────────────────────────────┘
-                              │
-                              ▼
-          ┌─────────────────────────────────┐
-          │ Dashboard / Analytics UI        │
-          │ - View shots overlayed on video │
-          └─────────────────────────────────┘
+```mermaid
+graph TD
+    A[Video Upload / Stream] --> B[Pose Estimation Service<br/>GPU]
+    B --> C[Shot Detection Service<br/>CPU]
+    C --> D[Event Storage & API]
+    D --> E[Dashboard / Analytics UI]
+
+    style B fill:#e1f5ff,stroke:#0288d1,stroke-width:2px
+    style C fill:#fff3e0,stroke:#ef6c00,stroke-width:2px
+    style D fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    style E fill:#e8f5e9,stroke:#388e3c,stroke-width:2px
+
+    classDef notes fill:#fff,stroke:#666,stroke-width:1px,stroke-dasharray: 5 5
+
+    B1["• Extracts skeleton keypoints from frames<br/>• Outputs detections.csv, positions.csv"]:::notes
+    C1["• Runs Random Forest ML model<br/>• Produces shot events (timestamp, id)"]:::notes
+    D1["• Stores metadata in Postgres<br/>• Exposes REST/GraphQL endpoints"]:::notes
+    E1["• View shots overlayed on video"]:::notes
+
+    B -.-> B1
+    C -.-> C1
+    D -.-> D1
+    E -.-> E1
 ```
 
 ---
