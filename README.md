@@ -286,41 +286,62 @@ Design a **cloud-based architecture** to automatically detect shot attempts from
 
 ```mermaid
 graph TD
-    A[Video Upload / Stream] --> B[Pose Estimation Service<br/>GPU]
-    B --> C[Shot Detection Service<br/>CPU]
-    C --> D[Event Storage & API]
-    D --> E[Dashboard / Analytics UI]
+    V[Video Upload / Live Stream] -->|Chunks / Frames| K[Message Broker<br/>Kafka / PubSub]
 
-    style A fill:#37474f,stroke:#90a4ae,stroke-width:3px,color:#fff
-    style B fill:#1565c0,stroke:#64b5f6,stroke-width:3px,color:#fff
-    style C fill:#e65100,stroke:#ffb74d,stroke-width:3px,color:#fff
-    style D fill:#6a1b9a,stroke:#ba68c8,stroke-width:3px,color:#fff
-    style E fill:#2e7d32,stroke:#81c784,stroke-width:3px,color:#fff
+    K --> IP[Inference Preprocessor<br/>CPU]
+    IP --> PE[Pose Estimation Service<br/>GPU-Accelerated]
+    PE --> FE[Feature Extraction & Shot Detection<br/>CPU]
 
-    classDef notes fill:#424242,stroke:#757575,stroke-width:2px,color:#e0e0e0
+    FE --> TS[Timeseries DB<br/>TimescaleDB/Postgres]
+    TS --> API[Event API Layer<br/>FastAPI / GraphQL]
+    API --> UI[Dashboard / Analytics UI]
 
-    B1["• Extracts skeleton keypoints from frames<br/>• Outputs detections.csv, positions.csv"]:::notes
-    C1["• Runs Random Forest ML model<br/>• Produces shot events timestamp, id"]:::notes
-    D1["• Stores metadata in Postgres<br/>• Exposes REST/GraphQL endpoints"]:::notes
-    E1["• View shots overlayed on video"]:::notes
+    subgraph Infra
+      K
+      IP
+      PE
+      FE
+      TS
+      API
+    end
 
-    B -.-> B1
-    C -.-> C1
-    D -.-> D1
-    E -.-> E1
+    style V fill:#37474f,stroke:#90a4ae,stroke-width:3px,color:#fff
+    style K fill:#546e7a,stroke:#90a4ae,stroke-width:3px,color:#fff
+    style IP fill:#455a64,stroke:#cfd8dc,stroke-width:3px,color:#fff
+    style PE fill:#1565c0,stroke:#64b5f6,stroke-width:3px,color:#fff
+    style FE fill:#e65100,stroke:#ffb74d,stroke-width:3px,color:#fff
+    style TS fill:#6a1b9a,stroke:#ba68c8,stroke-width:3px,color:#fff
+    style API fill:#283593,stroke:#7986cb,stroke-width:3px,color:#fff
+    style UI fill:#2e7d32,stroke:#81c784,stroke-width:3px,color:#fff
 ```
 
 ---
 
 ### Scalability & Deployment
+
+The system is designed to scale along two primary axes: **number of concurrent video streams** and **inference throughput** (FPS). All processing stages are loosely coupled to prevent cascading failures.
+
 | Component | Technology | Notes |
 |------------|-------------|-------|
-| **Video storage** | AWS S3 / GCP Cloud Storage | Raw input |
-| **Messaging** | Kafka / PubSub | Decouple video and detection stages |
-| **Compute** | Kubernetes pods | Autoscale GPU (pose) and CPU (detection) |
-| **Database** | Postgres + TimescaleDB | Store time-series shot events |
-| **Monitoring** | Prometheus + Grafana | Track latency & throughput |
-| **API layer** | FastAPI / Flask | Serve event data to dashboard |
+| **Video storage** | AWS S3 / GCP Cloud Storage | Durable storage for raw input; triggers downstream processing |
+| **Video ingestion** | Kafka / PubSub | Buffers frames and decouples producers from consumers, prevents backpressure |
+| **Pose estimation** | GPU-backed Kubernetes pods | Horizontally autoscaled based on queue lag; GPU-resource optimized |
+| **Feature extraction & shot detection** | CPU-backed pods | Stateless microservices, autoscaled separately from pose inference |
+| **Time-series data store** | TimescaleDB / Postgres | Efficient storage and querying of temporal shot events |
+| **Model registry** | MLflow / S3 | Versioning and rollout of updated detection models |
+| **Monitoring** | Prometheus + Grafana | Tracks queue lag, inference latency, GPU utilization |
+| **API layer** | FastAPI / Flask | Serves detected shot attempts to downstream apps (dashboards, analytics) |
+
+#### Scaling strategy
+- **Horizontal scaling** of inference workers based on Kafka topic lag
+- **Independent scaling** of pose and shot detection services
+- **Stateless processors** — easy redeploys & rollouts
+- **Cloud object storage** — cheap & highly available
+
+#### Resilience
+- Message queues absorb spikes during peak load
+- Failed frames are retried without blocking upstream
+- Graceful degradation if GPU capacity is saturated
 
 ---
 
