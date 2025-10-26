@@ -291,15 +291,16 @@ graph TD
     C --> D[Event Storage & API]
     D --> E[Dashboard / Analytics UI]
 
-    style B fill:#e1f5ff,stroke:#0288d1,stroke-width:2px
-    style C fill:#fff3e0,stroke:#ef6c00,stroke-width:2px
-    style D fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
-    style E fill:#e8f5e9,stroke:#388e3c,stroke-width:2px
+    style A fill:#37474f,stroke:#90a4ae,stroke-width:3px,color:#fff
+    style B fill:#1565c0,stroke:#64b5f6,stroke-width:3px,color:#fff
+    style C fill:#e65100,stroke:#ffb74d,stroke-width:3px,color:#fff
+    style D fill:#6a1b9a,stroke:#ba68c8,stroke-width:3px,color:#fff
+    style E fill:#2e7d32,stroke:#81c784,stroke-width:3px,color:#fff
 
-    classDef notes fill:#fff,stroke:#666,stroke-width:1px,stroke-dasharray: 5 5
+    classDef notes fill:#424242,stroke:#757575,stroke-width:2px,color:#e0e0e0
 
     B1["• Extracts skeleton keypoints from frames<br/>• Outputs detections.csv, positions.csv"]:::notes
-    C1["• Runs Random Forest ML model<br/>• Produces shot events (timestamp, id)"]:::notes
+    C1["• Runs Random Forest ML model<br/>• Produces shot events timestamp, id"]:::notes
     D1["• Stores metadata in Postgres<br/>• Exposes REST/GraphQL endpoints"]:::notes
     E1["• View shots overlayed on video"]:::notes
 
