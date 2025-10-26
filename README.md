@@ -296,7 +296,7 @@ graph TD
     TS --> API[Event API Layer<br/>FastAPI / GraphQL]
     API --> UI[Dashboard / Analytics UI]
 
-    subgraph Infra
+    subgraph Infra ["<div style="width:20em; display:flex; justify-content: flex-start; align-items:flex-end;">Infra</div>"]
       K
       IP
       PE
@@ -305,13 +305,13 @@ graph TD
       API
     end
 
-    style V fill:#37474f,stroke:#90a4ae,stroke-width:3px,color:#fff
-    style K fill:#546e7a,stroke:#90a4ae,stroke-width:3px,color:#fff
-    style IP fill:#455a64,stroke:#cfd8dc,stroke-width:3px,color:#fff
-    style PE fill:#1565c0,stroke:#64b5f6,stroke-width:3px,color:#fff
-    style FE fill:#e65100,stroke:#ffb74d,stroke-width:3px,color:#fff
+    style V fill:#2e7d32,stroke:#81c784,stroke-width:3px,color:#fff
+    style IP fill:#1565c0,stroke:#64b5f6,stroke-width:3px,color:#fff
+    style K fill:#455a64,stroke:#cfd8dc,stroke-width:3px,color:#fff
+    style PE fill:#e65100,stroke:#ffb74d,stroke-width:3px,color:#fff
+    style FE fill:#283593,stroke:#7986cb,stroke-width:3px,color:#fff
     style TS fill:#6a1b9a,stroke:#ba68c8,stroke-width:3px,color:#fff
-    style API fill:#283593,stroke:#7986cb,stroke-width:3px,color:#fff
+    style API fill:#546e7a,stroke:#90a4ae,stroke-width:3px,color:#fff
     style UI fill:#2e7d32,stroke:#81c784,stroke-width:3px,color:#fff
 ```
 
