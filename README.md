@@ -321,16 +321,16 @@ graph TD
 
 The system is designed to scale along two primary axes: **number of concurrent video streams** and **inference throughput** (FPS). All processing stages are loosely coupled to prevent cascading failures.
 
-| Component | Technology | Notes |
-|------------|-------------|-------|
-| **Video storage** | AWS S3 / GCP Cloud Storage | Durable storage for raw input; triggers downstream processing |
-| **Video ingestion** | Kafka / PubSub | Buffers frames and decouples producers from consumers, prevents backpressure |
-| **Pose estimation** | GPU-backed Kubernetes pods | Horizontally autoscaled based on queue lag; GPU-resource optimized |
+| Component                               | Technology | Notes |
+|-----------------------------------------|-------------|-------|
+| **Video storage**                       | AWS S3 / GCP Cloud Storage | Durable storage for raw input; triggers downstream processing |
+| **Video ingestion**                     | Kafka / PubSub | Buffers frames and decouples producers from consumers, prevents backpressure |
+| **Pose estimation**                     | GPU-backed Kubernetes pods | Horizontally autoscaled based on queue lag; GPU-resource optimized |
 | **Feature extraction & shot detection** | CPU-backed pods | Stateless microservices, autoscaled separately from pose inference |
-| **Time-series data store** | TimescaleDB / Postgres | Efficient storage and querying of temporal shot events |
-| **Model registry** | MLflow / S3 | Versioning and rollout of updated detection models |
-| **Monitoring** | Prometheus + Grafana | Tracks queue lag, inference latency, GPU utilization |
-| **API layer** | FastAPI / Flask | Serves detected shot attempts to downstream apps (dashboards, analytics) |
+| **Time-series data store**              | TimescaleDB / Postgres | Efficient storage and querying of temporal shot events |
+| **Model registry (optional)**           | MLflow / S3 | Versioning and rollout of updated detection models |
+| **Monitoring**                          | Prometheus + Grafana | Tracks queue lag, inference latency, GPU utilization |
+| **API layer**                           | FastAPI / Flask | Serves detected shot attempts to downstream apps (dashboards, analytics) |
 
 #### Scaling strategy
 - **Horizontal scaling** of inference workers based on Kafka topic lag
